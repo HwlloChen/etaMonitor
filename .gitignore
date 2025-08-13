@@ -1,0 +1,32 @@
+# Go build
+/backend/etamonitor
+/backend/etamonitor.exe
+/output/
+
+# Go vendor & mod cache
+/backend/vendor/
+/backend/go.sum
+
+# IDE/editor
+*.swp
+*.swo
+.vscode/
+.idea/
+.DS_Store
+.claude/
+
+# 前端依赖和构建产物
+/frontend/node_modules/
+/frontend/dist/
+/backend/internal/static/frontend-dist/
+
+# 日志和数据库
+/backend/data/*.db
+/backend/data/*.log
+
+# 配置文件
+.config.json
+/backend/config.json
+
+# 其他
+*.log
