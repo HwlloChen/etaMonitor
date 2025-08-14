@@ -37,9 +37,9 @@ func (s *Service) Start() {
 	cleanupTicker := time.NewTicker(1 * time.Hour)
 	defer cleanupTicker.Stop()
 
-	// 会话清理任务 (每5分钟执行一次)
-	sessionCleanupTicker := time.NewTicker(5 * time.Minute)
-	defer sessionCleanupTicker.Stop()
+	// 移除会话清理任务，避免误杀活跃玩家会话
+	// sessionCleanupTicker := time.NewTicker(5 * time.Minute)
+	// defer sessionCleanupTicker.Stop()
 
 	log.Printf("Server monitoring started with interval: %v", s.config.MonitorInterval)
 
@@ -49,8 +49,9 @@ func (s *Service) Start() {
 			s.checkAllServers()
 		case <-cleanupTicker.C:
 			s.cleanupOldStats()
-		case <-sessionCleanupTicker.C:
-			s.playerSessionService.CleanupInactiveSessions()
+		// 移除会话清理的case分支
+		// case <-sessionCleanupTicker.C:
+		//	s.playerSessionService.CleanupInactiveSessions()
 		}
 	}
 }

@@ -57,7 +57,7 @@ func createDefaultAdmin(db *gorm.DB) error {
 	db.Model(&models.User{}).Where("role = ?", "admin").Count(&count)
 
 	if count > 0 {
-		log.Println("Admin user already exists, skipping creation")
+		// log.Println("Admin user already exists, skipping creation")
 		return nil
 	}
 

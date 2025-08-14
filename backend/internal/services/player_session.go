@@ -360,7 +360,7 @@ func (p *PlayerSessionService) broadcastPlayerJoin(serverID uint, player *models
 		"uuid":           player.UUID,
 		"server_name":    serverName,
 		"rank":           player.Rank,
-		"avatar":         p.getPlayerAvatar(player.UUID),
+		"avatar":         p.getPlayerAvatar(player.Username),
 		"players_online": p.getCurrentPlayersCount(serverID),
 	}
 	
@@ -405,14 +405,21 @@ func (p *PlayerSessionService) GetActivePlayerSessions(serverID uint) []models.P
 	return sessions
 }
 
-// CleanupInactiveSessions 清理不活跃的会话（超过1小时没有更新）
-func (p *PlayerSessionService) CleanupInactiveSessions() {
-	cutoff := time.Now().Add(-1 * time.Hour)
+// ManualCleanupOldSessions 手动清理极长时间的旧会话（仅在确认需要时调用）
+func (p *PlayerSessionService) ManualCleanupOldSessions(cutoffHours int) {
+	if cutoffHours < 24 {
+		log.Printf("安全起见，cutoffHours 必须大于等于24小时")
+		return
+	}
 	
-	var inactiveSessions []models.PlayerSession
-	p.db.Where("leave_time IS NULL AND join_time < ?", cutoff).Find(&inactiveSessions)
+	cutoff := time.Now().Add(-time.Duration(cutoffHours) * time.Hour)
 	
-	for _, session := range inactiveSessions {
+	var oldSessions []models.PlayerSession
+	p.db.Where("leave_time IS NULL AND join_time < ?", cutoff).Find(&oldSessions)
+	
+	log.Printf("准备清理 %d 个超过 %d 小时的旧会话", len(oldSessions), cutoffHours)
+	
+	for _, session := range oldSessions {
 		now := time.Now()
 		duration := int(now.Sub(session.JoinTime).Seconds())
 		
@@ -420,7 +427,15 @@ func (p *PlayerSessionService) CleanupInactiveSessions() {
 		session.Duration = duration
 		p.db.Save(&session)
 		
-		log.Printf("清理不活跃会话: 玩家ID=%d, 服务器ID=%d, 持续时间=%d秒", 
+		// 更新玩家总在线时间
+		var player models.Player
+		if p.db.First(&player, session.PlayerID).Error == nil {
+			player.TotalPlaytime += duration
+			player.LastSeen = now
+			p.db.Save(&player)
+		}
+		
+		log.Printf("清理旧会话: 玩家ID=%d, 服务器ID=%d, 持续时间=%d秒", 
 			session.PlayerID, session.ServerID, duration)
 	}
 }
