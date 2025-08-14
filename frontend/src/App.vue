@@ -15,7 +15,8 @@
         <!-- 右侧操作按钮 -->
         <div class="header-actions">
           <!-- WebSocket状态指示器 -->
-          <mdui-chip :icon="wsStatusIcon" v-if="!isMobile">{{ wsStatusText }}</mdui-chip>
+          <mdui-chip :icon="wsStatusIcon" v-if="!isMobile" :="{ loading: wsStatus === 'connecting' }">{{
+            wsStatusText }}</mdui-chip>
           <mdui-button-icon :icon="themeIcon" @click="toggleTheme"></mdui-button-icon>
         </div>
       </mdui-top-app-bar>
@@ -71,6 +72,7 @@
             icon="login"></mdui-list-item>
 
           <mdui-list-item @click="handleLogout" v-else headline="退出登录" icon="logout"></mdui-list-item>
+          <div class="about" style="margin-top: auto;">Powered by <a href="https://github.com/HwlloChen/etaMonitor">etaMonitor</a></div>
         </mdui-list>
       </mdui-navigation-drawer>
 
@@ -80,6 +82,7 @@
           <!-- 页面内容 -->
           <router-view />
         </div>
+        <div class="about" v-show="windowWidth > 600">Powered by <a href="https://github.com/HwlloChen/etaMonitor">etaMonitor</a></div>
       </mdui-layout-main>
     </mdui-layout>
 
@@ -353,6 +356,7 @@ export default {
       wsStatus,
       wsStatusText,
       themeIcon,
+      windowWidth,
 
       // computed
       isMobile,
@@ -418,7 +422,7 @@ export default {
 .main-content {
   background-color: rgb(var(--mdui-color-surface-container));
   padding: 1rem;
-  margin: 0 1rem 1rem 0.5rem;
+  margin: 0 1rem 0.5rem 0.5rem;
   height: calc(100% - 2rem);
   overflow: auto;
   border-radius: 1.5rem;
@@ -480,6 +484,7 @@ export default {
 
 .drawer-nav {
   padding: 8px 0;
+  flex: auto;
 }
 
 .drawer-footer {
@@ -495,6 +500,17 @@ export default {
   gap: 16px;
   padding: 0 24px;
   min-width: 280px;
+}
+
+.about {
+  text-align: center;
+  font-size: 0.875rem;
+}
+
+mdui-navigation-drawer::part(panel) {
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
 }
 
 /* 响应式设计 */
