@@ -17,16 +17,9 @@
             </div>
             <div class="session-filter">
                 <span>服务器：</span>
-                <mdui-select 
-                    multiple 
-                    clearable 
-                    placeholder="全部" 
-                    style="min-width: 180px"
-                    @change="handleMduiSelectChange"
-                    :disabled="isLoadingChart"
-                    key="server-selector"
-                    ref="serverSelectRef"
-                >
+                <mdui-select multiple clearable placeholder="全部" style="min-width: 180px"
+                    @change="handleMduiSelectChange" :disabled="isLoadingChart" key="server-selector"
+                    ref="serverSelectRef">
                     <mdui-menu-item v-for="s in serverList" :key="s.id" :value="s.id">{{ s.name }}</mdui-menu-item>
                 </mdui-select>
             </div>
@@ -52,22 +45,20 @@
                 <div class="card-header">
                     <h2>在线历史</h2>
                 </div>
-                <div style="max-height: 320px; overflow-y: auto;">
-                    <mdui-list v-if="filteredSessions.length > 0">
-                        <mdui-list-item v-for="session in filteredSessions" :key="session.id">
-                            <div class="session-info">
-                                <div>服务器: {{ session.server?.name || session.server_id }}</div>
-                                <div>加入: {{ formatDateTime(session.join_time) }}</div>
-                                <div>离开: {{ session.leave_time ? formatDateTime(session.leave_time) : '在线中' }}</div>
-                                <div>时长: {{ session.leave_time ? formatDuration(session.duration) :
-                                    formatDuration(getCurrentSessionDuration(session)) }}</div>
-                            </div>
-                        </mdui-list-item>
-                    </mdui-list>
-                    <div v-else class="empty-state">
-                        <mdui-icon name="history" style="font-size: 48px; opacity: 0.5;"></mdui-icon>
-                        <p>暂无历史记录</p>
-                    </div>
+                <mdui-list v-if="filteredSessions.length > 0" class="list">
+                    <mdui-list-item v-for="session in filteredSessions" :key="session.id">
+                        <div class="session-info">
+                            <div>服务器: {{ session.server?.name || session.server_id }}</div>
+                            <div>加入: {{ formatDateTime(session.join_time) }}</div>
+                            <div>离开: {{ session.leave_time ? formatDateTime(session.leave_time) : '在线中' }}</div>
+                            <div>时长: {{ session.leave_time ? formatDuration(session.duration) :
+                                formatDuration(getCurrentSessionDuration(session)) }}</div>
+                        </div>
+                    </mdui-list-item>
+                </mdui-list>
+                <div v-else class="empty-state">
+                    <mdui-icon name="history" style="font-size: 48px; opacity: 0.5;"></mdui-icon>
+                    <p>暂无历史记录</p>
                 </div>
             </mdui-card>
         </div>
@@ -115,7 +106,7 @@ export default {
         const chartKey = ref(0)
         const isLoadingChart = ref(false)
         const chartColor = `rgb(${getComputedStyle(document.documentElement).getPropertyValue('--mdui-color-primary').trim()})`
-        
+
         // 处理mdui-select的值变化
         const handleMduiSelectChange = (event) => {
             const newValue = event.target.value
@@ -180,13 +171,13 @@ export default {
         const loadServerList = async () => {
             try {
                 const res = await fetch('/api/servers/')
-                
+
                 // 检查响应状态
                 if (res.status === 404) {
                     router.push('/404')
                     return
                 }
-                
+
                 const result = await res.json()
                 if (result.success && Array.isArray(result.data)) {
                     serverList.value = result.data
@@ -215,27 +206,27 @@ export default {
         // 加载图表数据
         const loadChartData = async () => {
             if (isLoadingChart.value) return // 防止重复加载
-            
+
             try {
                 isLoadingChart.value = true
                 const url = buildStatsUrl()
-                
+
                 const res = await fetch(url)
-                
+
                 // 检查响应状态
                 if (res.status === 404) {
                     router.push('/404')
                     return
                 }
-                
+
                 const result = await res.json()
-                
+
                 const raw = (result.data && result.data.time_distribution) || {}
 
                 const hours = Array.from({ length: 24 }, (_, i) => i)
                 const labels = hours.map(h => `${h.toString().padStart(2, '0')}:00~${(h + 1) % 24 === 0 ? '00' : (h + 1).toString().padStart(2, '0')}:00`)
                 const values = hours.map(h => raw[h] || 0)
-                
+
 
                 updateChart(labels, values)
             } catch (error) {
@@ -284,7 +275,7 @@ export default {
                 sessions.value = res.data || []
                 let sum = 0
                 for (const s of sessions.value) {
-                    sum += s.duration || 0
+                    sum += getCurrentSessionDuration(s)
                 }
                 totalPlaytime.value = sum > 0 ? sum : (player.value.total_playtime || 0)
             } catch (error) {
@@ -341,7 +332,7 @@ export default {
         }
 
         const updateChart = (labels, values) => {
-            
+
             // 更新图表数据 - 不强制重新渲染，让vue-chartjs处理
             chartData.value = {
                 labels: [...labels],
@@ -353,7 +344,7 @@ export default {
                     borderWidth: 1
                 }]
             }
-            
+
         }
 
         const goBack = () => router.go(-1)
@@ -475,6 +466,11 @@ export default {
     font-size: 1.1rem;
     margin-left: auto;
     justify-content: flex-end;
+}
+
+.list {
+  max-height: 320px;
+  overflow-y: auto;
 }
 
 .player-detail {

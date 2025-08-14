@@ -56,7 +56,7 @@
           <h2>在线玩家</h2>
         </div>
 
-        <mdui-list v-if="onlinePlayers.length > 0">
+        <mdui-list v-if="onlinePlayers.length > 0" class="list">
           <mdui-list-item v-for="player in onlinePlayers" :key="player.username" @click="goToPlayer(player.username)">
             <mdui-avatar slot="icon" :src="player.avatar"></mdui-avatar>
 
@@ -83,7 +83,7 @@
           <h2>最近活动</h2>
         </div>
 
-        <mdui-list v-if="serverActivities.length > 0">
+        <mdui-list v-if="serverActivities.length > 0" class="list">
           <mdui-list-item v-for="activity in serverActivities" :key="`${activity.playerId}-${activity.timestamp}`">
             <mdui-avatar slot="icon" :src="activity.playerAvatar"></mdui-avatar>
 
@@ -612,6 +612,11 @@ export default {
   max-width: 1200px;
   margin: 0 auto;
   padding: 20px;
+}
+
+.list {
+  max-height: 320px;
+  overflow-y: auto;
 }
 
 .server-header {
