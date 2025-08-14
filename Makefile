@@ -1,5 +1,5 @@
 # 项目根目录 Makefile，便于一键编译和管理
-.PHONY: all clean build backend frontend run
+.PHONY: all clean build backend frontend run release
 
 all: build
 
@@ -17,3 +17,6 @@ frontend:
 
 run:
 	$(MAKE) -C backend run
+
+release:
+	$(MAKE) -C backend release

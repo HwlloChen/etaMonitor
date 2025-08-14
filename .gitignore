@@ -2,6 +2,7 @@
 /backend/etamonitor
 /backend/etamonitor.exe
 /output/
+/release/
 
 # Go vendor & mod cache
 /backend/vendor/
