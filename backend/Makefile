@@ -11,9 +11,9 @@ GO_LDFLAGS := -X "etamonitor/internal/config.Version=$(VERSION)" \
 # 交叉编译目标平台
 PLATFORMS := linux/386 linux/amd64 linux/arm linux/arm64 linux/loong64 \
              linux/mips linux/mips64 linux/mips64le linux/mipsle linux/ppc64 linux/ppc64le linux/riscv64 linux/s390x \
-			 darwin/amd64 darwin/arm64 \
-			 freebsd/386 freebsd/amd64 freebsd/arm freebsd/arm64 freebsd/riscv64 \
-			 windows/386 windows/amd64 windows/arm64
+             darwin/amd64 darwin/arm64 \
+             freebsd/386 freebsd/amd64 freebsd/arm freebsd/arm64 freebsd/riscv64 \
+             windows/386 windows/amd64 windows/arm64
 # 发布目录
 RELEASE_DIR := ../release
 
@@ -63,7 +63,8 @@ release: build-frontend
 		cp ../LICENSE $$output_dir/ 2>/dev/null || touch $$output_dir/LICENSE; \
 		cp ../README.md $$output_dir/ 2>/dev/null || touch $$output_dir/README.md; \
 		(cd $(RELEASE_DIR) && tar -czf etamonitor-$(VERSION)-$$OS-$$ARCH.tar.gz etamonitor-$(VERSION)-$$OS-$$ARCH/ ); \
+		(cd $(RELEASE_DIR) && sha256sum etamonitor-$(VERSION)-$$OS-$$ARCH.tar.gz > etamonitor-$(VERSION)-$$OS-$$ARCH.tar.gz.sha256 2>/dev/null || shasum -a 256 etamonitor-$(VERSION)-$$OS-$$ARCH.tar.gz > etamonitor-$(VERSION)-$$OS-$$ARCH.tar.gz.sha256); \
 		rm -rf $$output_dir; \
 	done
-	@echo "Release packages created in $(RELEASE_DIR)/"
+	@echo "Release packages and SHA256 checksums created in $(RELEASE_DIR)/"
 	@ls -la $(RELEASE_DIR)/
