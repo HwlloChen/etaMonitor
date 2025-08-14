@@ -1,5 +1,5 @@
 # 版本信息
-VERSION ?= 1.0.0
+VERSION ?= 1.0.1
 GIT_COMMIT := $(shell git rev-parse --short HEAD 2>/dev/null || echo "unknown")
 BUILD_TIME := $(shell date +%FT%T%z)
 

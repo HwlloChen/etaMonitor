@@ -2,7 +2,8 @@
   <div id="app">
     <mdui-layout class="app-layout">
       <!-- 顶部导航栏 -->
-      <mdui-top-app-bar :variant="isCompact ? 'small' : 'center-aligned'" scroll-behavior="elevate">
+      <mdui-top-app-bar :variant="isCompact ? 'small' : 'center-aligned'" scroll-behavior="elevate"
+        scroll-target=".main-content">
         <!-- 左侧菜单按钮 (仅在移动端显示) -->
         <mdui-button-icon v-if="isMobile" icon="menu" @click="toggleDrawer"></mdui-button-icon>
 
@@ -77,9 +78,7 @@
       <mdui-layout-main class="app-main">
         <div class="main-content" :class="{ 'with-rail': !isMobile }">
           <!-- 页面内容 -->
-          <div class="page-content">
-            <router-view />
-          </div>
+          <router-view />
         </div>
       </mdui-layout-main>
     </mdui-layout>
@@ -425,11 +424,6 @@ export default {
   border-radius: 1.5rem;
 }
 
-.page-content {
-  height: 100%;
-  overflow: auto;
-}
-
 .header-actions {
   display: flex;
   align-items: center;
@@ -506,9 +500,9 @@ export default {
 /* 响应式设计 */
 @media (max-width: 600px) {
   .main-content {
-    padding: 0.5rem;
+    padding: 0;
     margin: 0;
-    height: calc(100% - 64px - 1rem);
+    height: 100%;
     border-radius: 0;
   }
 
@@ -516,8 +510,12 @@ export default {
     padding: 0;
   }
 
-  .breadcrumb-nav {
-    margin-bottom: 16px;
+  mdui-top-app-bar {
+    background-color: rgb(var(--mdui-color-surface-container));
+  }
+
+  mdui-top-app-bar[scrolling] {
+    background-color: rgb(var(--mdui-color-surface));
   }
 }
 

@@ -7,7 +7,7 @@
           <mdui-icon :name="stat.icon" :class="['stat-icon', stat.iconClass]"></mdui-icon>
           <div class="stat-info">
             <div class="stat-number">
-              <span v-if="!statsLoading">{{ stats[stat.key] }}</span>
+              <span v-if="statsLoaded">{{ stats[stat.key] }}</span>
               <mdui-circular-progress v-else></mdui-circular-progress>
             </div>
             <div class="stat-label">{{ stat.label }}</div>
@@ -145,7 +145,7 @@ export default {
     const wsStatusText = ref('连接断开')
 
     // 加载状态
-    const statsLoading = ref(false)
+    const statsLoaded = ref(false)
     const serversLoading = ref(false)
     const playersLoading = ref(false)
     const serversRefreshing = ref(false)
@@ -182,9 +182,6 @@ export default {
     const eventCleanupFunctions = []
 
     const loadStats = async () => {
-      if (statsLoading.value) return
-      
-      statsLoading.value = true
       try {
         const response = await serverStore.getStats()
         if (response && response.data) {
@@ -193,7 +190,7 @@ export default {
       } catch (error) {
         console.error('加载统计数据失败:', error)
       } finally {
-        statsLoading.value = false
+        statsLoaded.value = true // 后续加载状态不再显示
       }
     }
 
@@ -367,7 +364,7 @@ export default {
       playerStore,
       wsStatus,
       wsStatusText,
-      statsLoading,
+      statsLoaded,
       serversLoading,
       playersLoading,
       serversRefreshing,

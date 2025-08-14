@@ -179,17 +179,6 @@ export const usePlayerStore = defineStore('player', {
         const minutes = Math.floor((seconds % 3600) / 60)
         return `${hours}小时${minutes}分钟`
       }
-    },
-
-    // 获取玩家头像URL
-    getPlayerAvatar(uuid, username = '') {
-      if (username) {
-        return `https://crafthead.net/avatar/${username}`
-      } else if (uuid) {
-        return `https://crafthead.net/avatar/${uuid}`
-      } else {
-        return 'https://crafthead.net/avatar/steve'
-      }
     }
   },
 
