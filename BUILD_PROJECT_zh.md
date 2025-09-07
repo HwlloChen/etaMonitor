@@ -15,6 +15,7 @@ VERSION=1.2.0 make
 ```
 
 启动时会显示版本信息：
+
 ```
 === etaMonitor 1.2.0 ===
 Build Time: 2025-08-14T21:30:45+0800
@@ -38,11 +39,13 @@ make
 ```
 
 等价于：
+
 ```sh
 make build
 ```
 
 该命令会自动：
+
 1. 进入 backend 目录
 2. 构建前端（自动安装依赖并构建）
 3. 拷贝前端产物到后端嵌入目录
@@ -169,9 +172,11 @@ cd etamonitor-1.2.0-linux-amd64/
 - **版本信息显示 unknown**：请确保在 Git 仓库中构建，否则无法获取 Git 提交信息。
 - **交叉编译失败**：某些平台可能因为 CGO 依赖而编译失败，这是正常现象，成功的平台会正常打包。
 - **发布包过大**：如果二进制文件过大，可以在 GO_LDFLAGS 中添加 `-s -w` 参数来减小文件大小：
+
   ```makefile
   GO_LDFLAGS := -s -w -X "etamonitor/internal/config.Version=$(VERSION)" ...
   ```
+
 - **tar 命令未找到**：Windows 用户请在 WSL 环境中执行，或安装 tar 工具。
 
 ## 版本管理建议
