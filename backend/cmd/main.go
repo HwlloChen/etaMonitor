@@ -58,8 +58,17 @@ func main() {
 	router.Use(gin.Logger())
 	router.Use(gin.Recovery())
 
-	// 禁用Gin默认的可信代理功能，使用自定义IP检测逻辑
-	router.SetTrustedProxies(nil)
+	// 设置受信任的代理，以修复"You trusted all proxies, this is NOT safe"警告
+	// 包括本地网络和常见的反向代理IP范围
+	err = router.SetTrustedProxies([]string{
+		"127.0.0.1",      // localhost
+		"10.0.0.0/8",     // 私有网络 10.x.x.x
+		"172.16.0.0/12",  // 私有网络 172.16-31.x.x
+		"192.168.0.0/16", // 私有网络 192.168.x.x
+	})
+	if err != nil {
+		log.Printf("Warning: Failed to set trusted proxies: %v", err)
+	}
 
 	// 初始化API路由
 	api.SetupRoutes(router, database, cfg)

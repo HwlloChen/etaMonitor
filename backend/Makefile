@@ -41,7 +41,7 @@ build-backend:
 
 run:
 	@echo "Starting etaMonitor..."
-	cd ../output && ./etamonitor
+	cd ../output && GIN_MODE=debug ./etamonitor
 
 release: build-frontend
 	@echo "Building release packages for all platforms..."
