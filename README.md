@@ -1,4 +1,4 @@
-# etaMonitor: Next-Generation Minecraft Server Monitoring System
+# etaMonitor: A Minecraft Server Monitoring System
 
 [![Go Version](https://img.shields.io/badge/Go-1.23.0-blue.svg)](https://golang.org/)
 [![Vue.js](https://img.shields.io/badge/Vue.js-3.3+-4FC08D.svg)](https://vuejs.org/)
