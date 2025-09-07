@@ -6,6 +6,9 @@
 
 _查看我们的 [Demo站点](https://em.etaris.moe)_
 
+- [中文文档](README_zh.md)
+- [English](README.md)
+
 ## 概述
 
 etaMonitor 是一款功能强大的自部署 Minecraft 服务器监控系统，提供实时监控、数据分析和美观的 Web 界面。

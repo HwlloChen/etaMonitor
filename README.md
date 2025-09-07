@@ -6,6 +6,9 @@
 
 _Check out our [Demo Site](https://em.etaris.moe)_
 
+- [中文文档](README_zh.md)
+- [English](README.md)
+
 ## Overview
 
 etaMonitor is a powerful self-hosted Minecraft server monitoring system that provides real-time monitoring, data analysis, and a beautiful web interface.
