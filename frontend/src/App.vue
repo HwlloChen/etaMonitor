@@ -72,7 +72,8 @@
             icon="login"></mdui-list-item>
 
           <mdui-list-item @click="handleLogout" v-else headline="退出登录" icon="logout"></mdui-list-item>
-          <div class="about" style="margin-top: auto;">Powered by <a href="https://github.com/HwlloChen/etaMonitor">etaMonitor</a></div>
+          <div class="about" style="margin-top: auto;">Powered by <a
+              href="https://github.com/HwlloChen/etaMonitor">etaMonitor</a></div>
         </mdui-list>
       </mdui-navigation-drawer>
 
@@ -82,43 +83,55 @@
           <!-- 页面内容 -->
           <router-view />
         </div>
-        <div class="about" v-show="windowWidth > 600">Powered by <a href="https://github.com/HwlloChen/etaMonitor">etaMonitor</a></div>
+        <div class="about" v-show="windowWidth > 600">Powered by <a
+            href="https://github.com/HwlloChen/etaMonitor">etaMonitor</a></div>
       </mdui-layout-main>
     </mdui-layout>
 
     <!-- 登录对话框 -->
     <mdui-dialog :open="showLoginDialog" @close="onLoginDialogClose" headline="管理员登录" class="login-dialog">
-      <div class="login-form">
-        <!-- HTTPS 安全警告 -->
-        <div v-if="!isSecureConnection" class="security-warning">
-          <mdui-icon name="warning" class="warning-icon"></mdui-icon>
-          <div class="warning-text">
-            <strong>安全警告</strong><br>
-            您正在通过不安全的连接访问此页面。在非HTTPS连接下登录可能会泄露您的凭据。
-            建议使用HTTPS连接或仅在受信任的网络环境中登录。
+      <!-- 使用表单以便浏览器密码管理器识别 -->
+      <form autocomplete="on" @submit.prevent="handleLogin">
+        <div class="login-form">
+          <!-- 隐藏但可被浏览器检测到的原生输入（用于密码管理器） -->
+          <input class="invisible-input" type="text" name="username" autocomplete="username"
+            v-model="loginForm.username" />
+          <input class="invisible-input" type="password" name="current-password" autocomplete="current-password"
+            v-model="loginForm.password" />
+
+          <!-- HTTP 安全警告 -->
+          <div v-if="!isSecureConnection" class="security-warning">
+            <mdui-icon name="warning" class="warning-icon"></mdui-icon>
+            <div class="warning-text">
+              <strong>安全警告</strong><br>
+              您正在通过不安全的连接访问此页面。在非HTTPS连接下登录可能会泄露您的凭据。
+              建议使用HTTPS连接或仅在受信任的网络环境中登录。
+            </div>
           </div>
+
+          <mdui-text-field variant="outlined" label="用户名" :value="loginForm.username"
+            @input="loginForm.username = $event.target.value" icon="person" required
+            @keydown.enter.prevent="$refs.passwordField.focus()"></mdui-text-field>
+
+          <mdui-text-field variant="outlined" ref="passwordField" label="密码" type="password" :value="loginForm.password"
+            @input="loginForm.password = $event.target.value" icon="lock" required></mdui-text-field>
         </div>
-        
-        <mdui-text-field label="用户名" :value="loginForm.username" @input="loginForm.username = $event.target.value"
-          icon="person" required @keydown.enter="$refs.passwordField.focus()"></mdui-text-field>
+        <div class="action-buttons">
+          <div class="error-message">
+            <mdui-icon v-if="loginError" name="error" class="error-icon"></mdui-icon>
+            {{ loginError }}
+          </div>
 
-        <mdui-text-field ref="passwordField" label="密码" type="password" :value="loginForm.password"
-          @input="loginForm.password = $event.target.value" icon="lock" required
-          @keydown.enter="handleLogin"></mdui-text-field>
-
-        <div v-if="loginError" class="error-message">
-          <mdui-icon name="error" class="error-icon"></mdui-icon>
-          {{ loginError }}
+          <mdui-button slot="action" variant="text" @click="onLoginDialogClose">
+            取消
+          </mdui-button>
+          <!-- 将按钮作为表单提交（type=submit），以便密码管理器/浏览器识别提交事件 -->
+          <mdui-button slot="action" variant="filled" type="submit" :loading="isLoggingIn"
+            :disabled="!loginForm.username || !loginForm.password">
+            登录
+          </mdui-button>
         </div>
-      </div>
-
-      <mdui-button slot="action" variant="text" @click="onLoginDialogClose">
-        取消
-      </mdui-button>
-      <mdui-button slot="action" variant="filled" @click="handleLogin" :loading="isLoggingIn"
-        :disabled="!loginForm.username || !loginForm.password">
-        登录
-      </mdui-button>
+      </form>
     </mdui-dialog>
   </div>
 </template>
@@ -160,12 +173,12 @@ export default {
     const railAlignment = computed(() => isCompact.value ? 'start' : 'center')
     const isAuthenticated = computed(() => authStore.isAuthenticated)
     const isSecureConnection = computed(() => {
-      return window.location.protocol === 'https:' || 
-             window.location.hostname === 'localhost' || 
-             window.location.hostname === '127.0.0.1' ||
-             window.location.hostname.startsWith('192.168.') ||
-             window.location.hostname.startsWith('10.') ||
-             window.location.hostname.match(/^172\.(1[6-9]|2\d|3[01])\./)
+      return window.location.protocol === 'https:' ||
+        window.location.hostname === 'localhost' ||
+        window.location.hostname === '127.0.0.1' ||
+        window.location.hostname.startsWith('192.168.') ||
+        window.location.hostname.startsWith('10.') ||
+        window.location.hostname.match(/^172\.(1[6-9]|2\d|3[01])\./)
     })
 
     // WebSocket状态相关计算属性
@@ -293,7 +306,9 @@ export default {
     const onLoginDialogClose = () => {
       showLoginDialog.value = false
       loginError.value = ''
-      loginForm.value = { username: '', password: '' }
+      setTimeout(() => {
+        if (!showLoginDialog.value) loginForm.value = { username: '', password: '' }
+      }, 5000); // 延迟清除表单
     }
 
     // 退出登录
@@ -412,6 +427,7 @@ export default {
   color: rgb(var(--mdui-color-error));
   font-size: 0.875rem;
   padding: 4px 0;
+  flex: 1;
 }
 
 .error-icon {
@@ -543,7 +559,7 @@ export default {
   display: flex;
   flex-direction: column;
   gap: 16px;
-  padding: 0 24px;
+  padding: 0 18px;
   min-width: 280px;
 }
 
@@ -556,6 +572,17 @@ mdui-navigation-drawer::part(panel) {
   display: flex;
   flex-direction: column;
   justify-content: space-between;
+}
+
+/* 隐藏但可被浏览器检测的输入（避免 display:none） */
+.invisible-input {
+  position: absolute;
+  left: -9999px;
+  top: -9999px;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+  pointer-events: none;
 }
 
 /* 响应式设计 */
@@ -578,6 +605,26 @@ mdui-navigation-drawer::part(panel) {
   mdui-top-app-bar[scrolling] {
     background-color: rgb(var(--mdui-color-surface));
   }
+
+  /* 登录对话框 */
+  .login-form {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    padding: 0 6px;
+    min-width: 280px;
+  }
+
+  .login-dialog {
+    padding: 1rem;
+
+    form {
+      .error-message {
+        font-size: 0.75rem;
+        padding: 2px 0;
+      }
+    }
+  }
 }
 
 /* 动画效果 */
@@ -587,5 +634,17 @@ mdui-navigation-drawer::part(panel) {
 
 .main-content {
   transition: margin-left 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.login-dialog {
+  form {
+    margin-top: .4rem;
+
+    .action-buttons {
+      width: 100%;
+      display: flex;
+      padding-top: 1rem;
+    }
+  }
 }
 </style>
