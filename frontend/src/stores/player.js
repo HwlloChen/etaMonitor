@@ -129,6 +129,31 @@ export const usePlayerStore = defineStore('player', {
       console.log(`玩家离开: ${data.username} -> ${data.server_name} (游戏时长: ${data.session_duration}秒)`)
     },
 
+    // 从服务器获取最近活动
+    async fetchRecentActivities(params = {}) {
+      try {
+        const response = await api.get('/activities/recent', { params })
+        if (response.data.success && response.data.data) {
+          // 将后端数据转换为前端格式
+          this.recentActivities = response.data.data.map(activity => ({
+            type: activity.activity_type,
+            playerId: activity.player_id,
+            playerName: activity.player_name,
+            playerAvatar: activity.player_avatar,
+            playerRank: activity.player_rank,
+            serverId: activity.server_id,
+            serverName: activity.server_name,
+            timestamp: new Date(activity.timestamp),
+            sessionDuration: activity.session_duration || undefined
+          }))
+        }
+        return response.data
+      } catch (error) {
+        console.error('获取最近活动失败:', error)
+        throw error
+      }
+    },
+
     // 从服务器获取在线玩家
     async fetchOnlinePlayers(serverId) {
       try {

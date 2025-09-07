@@ -35,12 +35,7 @@
 
         <!-- 服务器列表 -->
         <mdui-list v-else-if="servers.length > 0">
-          <mdui-list-item 
-            v-for="server in servers" 
-            :key="server.id" 
-            @click="goToServer(server.id)" 
-            class="server-item"
-          >
+          <mdui-list-item v-for="server in servers" :key="server.id" @click="goToServer(server.id)" class="server-item">
             <mdui-avatar slot="icon">
               <mdui-icon :name="server.status === 'online' ? 'wifi_tethering' : 'wifi_off'"></mdui-icon>
             </mdui-avatar>
@@ -82,20 +77,15 @@
 
         <!-- 玩家活动列表 -->
         <mdui-list v-else-if="playerStore.recentActivities.length > 0">
-          <mdui-list-item 
-            v-for="activity in playerStore.getRecentActivities(8)"
-            :key="`${activity.playerId}-${activity.timestamp}`" 
-            @click="goToPlayer(activity.playerId)"
-          >
+          <mdui-list-item v-for="(activity, index) in playerStore.getRecentActivities(8)"
+            :key="`${activity.playerId}-${activity.timestamp}-${index}`" @click="goToPlayer(activity.playerName)">
             <mdui-avatar slot="icon" :src="activity.playerAvatar"></mdui-avatar>
 
             <div class="player-info">
               <div class="player-name">{{ activity.playerName }}</div>
               <div class="player-action">
-                <mdui-icon 
-                  :name="activity.type === 'join' ? 'login' : 'logout'"
-                  :class="activity.type === 'join' ? 'join-icon' : 'leave-icon'"
-                ></mdui-icon>
+                <mdui-icon :name="activity.type === 'join' ? 'login' : 'logout'"
+                  :class="activity.type === 'join' ? 'join-icon' : 'leave-icon'"></mdui-icon>
                 {{ activity.type === 'join' ? '加入' : '离开' }} {{ activity.serverName }}
                 <span v-if="activity.type === 'leave' && activity.sessionDuration" class="duration">
                   ({{ playerStore.formatDuration(activity.sessionDuration) }})
@@ -124,7 +114,7 @@ import { ref, onMounted, onUnmounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useServerStore } from '../stores/server'
 import { usePlayerStore } from '../stores/player'
-import wsManager, { getWebSocketStatus, getWebSocketStatusText } from '../utils/ws'
+import { getWebSocketStatus, getWebSocketStatusText } from '../utils/ws'
 
 export default {
   name: 'Home',
@@ -198,7 +188,7 @@ export default {
       if (showLoading) {
         serversLoading.value = true
       }
-      
+
       try {
         const response = await serverStore.getServers()
         if (response && response.data) {
@@ -216,11 +206,10 @@ export default {
     const loadPlayers = async () => {
       playersLoading.value = true
       try {
-        // 如果需要从API加载玩家数据，在这里调用
-        // 目前使用store中的数据，所以直接设置为false
-        await new Promise(resolve => setTimeout(resolve, 500)) // 模拟加载时间
+        // 从API加载最近活动数据
+        await playerStore.fetchRecentActivities({ limit: 20 })
       } catch (error) {
-        console.error('加载玩家数据失败:', error)
+        console.error('加载玩家活动失败:', error)
       } finally {
         playersLoading.value = false
       }
@@ -231,7 +220,8 @@ export default {
       try {
         await Promise.all([
           loadServers(false),
-          loadStats()
+          loadStats(),
+          playerStore.fetchRecentActivities({ limit: 20 })
         ])
       } catch (error) {
         console.error('刷新数据失败:', error)
@@ -583,6 +573,11 @@ export default {
   z-index: 1000;
 }
 
+mdui-list {
+  max-height: 28rem;
+  overflow-y: auto;
+}
+
 @media (max-width: 1024px) {
   .stats-grid {
     grid-template-columns: repeat(2, 1fr);
@@ -618,6 +613,10 @@ export default {
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
+  }
+
+  mdui-list {
+    max-height: 20rem;
   }
 }
 </style>

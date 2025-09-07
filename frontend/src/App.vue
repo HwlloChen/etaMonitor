@@ -89,6 +89,16 @@
     <!-- 登录对话框 -->
     <mdui-dialog :open="showLoginDialog" @close="onLoginDialogClose" headline="管理员登录" class="login-dialog">
       <div class="login-form">
+        <!-- HTTPS 安全警告 -->
+        <div v-if="!isSecureConnection" class="security-warning">
+          <mdui-icon name="warning" class="warning-icon"></mdui-icon>
+          <div class="warning-text">
+            <strong>安全警告</strong><br>
+            您正在通过不安全的连接访问此页面。在非HTTPS连接下登录可能会泄露您的凭据。
+            建议使用HTTPS连接或仅在受信任的网络环境中登录。
+          </div>
+        </div>
+        
         <mdui-text-field label="用户名" :value="loginForm.username" @input="loginForm.username = $event.target.value"
           icon="person" required @keydown.enter="$refs.passwordField.focus()"></mdui-text-field>
 
@@ -149,6 +159,14 @@ export default {
     const isCompact = computed(() => windowWidth.value < 1200)
     const railAlignment = computed(() => isCompact.value ? 'start' : 'center')
     const isAuthenticated = computed(() => authStore.isAuthenticated)
+    const isSecureConnection = computed(() => {
+      return window.location.protocol === 'https:' || 
+             window.location.hostname === 'localhost' || 
+             window.location.hostname === '127.0.0.1' ||
+             window.location.hostname.startsWith('192.168.') ||
+             window.location.hostname.startsWith('10.') ||
+             window.location.hostname.match(/^172\.(1[6-9]|2\d|3[01])\./)
+    })
 
     // WebSocket状态相关计算属性
     const wsStatusIcon = computed(() => {
@@ -366,6 +384,7 @@ export default {
 
       navigationItems,
       isAuthenticated,
+      isSecureConnection,
       wsStatusIcon,
       wsStatusColor,
 
@@ -397,6 +416,32 @@ export default {
 
 .error-icon {
   font-size: 18px;
+  color: rgb(var(--mdui-color-error));
+}
+
+.security-warning {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 16px;
+  background-color: rgb(var(--mdui-color-error-container));
+  border-radius: 12px;
+  border-left: 4px solid rgb(var(--mdui-color-error));
+}
+
+.warning-icon {
+  color: rgb(var(--mdui-color-error));
+  font-size: 24px;
+  flex-shrink: 0;
+}
+
+.warning-text {
+  color: rgb(var(--mdui-color-on-error-container));
+  font-size: 0.875rem;
+  line-height: 1.4;
+}
+
+.warning-text strong {
   color: rgb(var(--mdui-color-error));
 }
 

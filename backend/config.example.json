@@ -1,0 +1,28 @@
+{
+  "server": {
+    "host": "127.0.0.1",
+    "port": "11451",
+    "environment": "release"
+  },
+  "database": {
+    "path": "./data/etamonitor.db"
+  },
+  "jwt": {
+    "secret": "your-secret-key-change-in-production",
+    "expires_in": "24h"
+  },
+  "monitor": {
+    "interval": "10s",
+    "ping_timeout": "10s",
+    "max_concurrent": 10,
+    "activity_retention_time": "15m"
+  },
+  "logging": {
+    "level": "info",
+    "format": "json"
+  },
+  "cors": {
+    "allow_origins": ["*"],
+    "allow_credentials": true
+  }
+}

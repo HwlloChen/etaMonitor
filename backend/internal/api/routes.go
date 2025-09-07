@@ -3,6 +3,7 @@ package api
 import (
 	"io"
 	"strings"
+	"time"
 
 	"etamonitor/internal/auth"
 	"etamonitor/internal/config"
@@ -68,11 +69,13 @@ func SetupRoutes(router *gin.Engine, db *gorm.DB, cfg *config.Config) {
 }
 
 func setupPublicRoutes(r *gin.RouterGroup, db *gorm.DB, cfg *config.Config) {
+	// 创建登录限流器：每分钟最多10次请求
+	loginLimiter := auth.NewRateLimiter(10, time.Minute)
 
 	// 认证
 	auth := r.Group("/auth")
 	{
-		auth.POST("/login", handleLogin(db, cfg.JWTSecret, cfg.JWTExpiresIn))
+		auth.POST("/login", loginLimiter.Middleware(), handleLogin(db, cfg.JWTSecret, cfg.JWTExpiresIn))
 		auth.POST("/refresh", handleRefresh(cfg.JWTSecret, cfg.JWTExpiresIn))
 	}
 
@@ -98,6 +101,12 @@ func setupPublicRoutes(r *gin.RouterGroup, db *gorm.DB, cfg *config.Config) {
 		players.GET("/", handleGetPlayers(db))
 		players.GET("/:id", handleGetPlayer(db))
 		players.GET("/:id/sessions", handleGetPlayerSessions(db))
+	}
+	
+	// 活动记录
+	activities := r.Group("/activities")
+	{
+		activities.GET("/recent", handleGetRecentActivities(db, cfg))
 	}
 }
 

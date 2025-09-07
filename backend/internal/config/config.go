@@ -16,6 +16,7 @@ type Config struct {
 	DatabasePath string `json:"database_path"`
 
 	// 服务器配置
+	Host        string `json:"host"`
 	Port        string `json:"port"`
 	Environment string `json:"environment"`
 
@@ -24,9 +25,10 @@ type Config struct {
 	JWTExpiresIn time.Duration `json:"jwt_expires_in"`
 
 	// 监控配置
-	MonitorInterval time.Duration `json:"monitor_interval"`
-	PingTimeout     time.Duration `json:"ping_timeout"`
-	MaxConcurrent   int           `json:"max_concurrent"`
+	MonitorInterval        time.Duration `json:"monitor_interval"`
+	PingTimeout            time.Duration `json:"ping_timeout"`
+	MaxConcurrent          int           `json:"max_concurrent"`
+	ActivityRetentionTime  time.Duration `json:"activity_retention_time"` // 活动记录保留时间
 
 	// 日志配置
 	LogLevel  string `json:"log_level"`
@@ -40,6 +42,7 @@ type Config struct {
 // ConfigFile 配置文件结构
 type ConfigFile struct {
 	Server struct {
+		Host        string `json:"host"`
 		Port        string `json:"port"`
 		Environment string `json:"environment"`
 	} `json:"server"`
@@ -54,9 +57,10 @@ type ConfigFile struct {
 	} `json:"jwt"`
 
 	Monitor struct {
-		Interval      string `json:"interval"`
-		PingTimeout   string `json:"ping_timeout"`
-		MaxConcurrent int    `json:"max_concurrent"`
+		Interval              string `json:"interval"`
+		PingTimeout           string `json:"ping_timeout"`
+		MaxConcurrent         int    `json:"max_concurrent"`
+		ActivityRetentionTime string `json:"activity_retention_time"`
 	} `json:"monitor"`
 
 	Logging struct {
@@ -98,6 +102,7 @@ func Load(configPath string) *Config {
 // setDefaults 设置默认配置
 func setDefaults(config *Config) {
 	config.DatabasePath = "./data/etamonitor.db"
+	config.Host = "127.0.0.1"
 	config.Port = "11451"
 	config.Environment = "release"
 	config.JWTSecret = "your-secret-key-change-in-production"
@@ -105,6 +110,7 @@ func setDefaults(config *Config) {
 	config.MonitorInterval = 10 * time.Second
 	config.PingTimeout = 10 * time.Second
 	config.MaxConcurrent = 10
+	config.ActivityRetentionTime = 15 * time.Minute
 	config.LogLevel = "info"
 	config.LogFormat = "json"
 	config.AllowOrigins = []string{"*"}
@@ -140,6 +146,9 @@ func loadConfigFile(config *Config, configPath string) {
 
 // applyConfigFile 应用配置文件设置
 func applyConfigFile(config *Config, configFile *ConfigFile) {
+	if configFile.Server.Host != "" {
+		config.Host = configFile.Server.Host
+	}
 	if configFile.Server.Port != "" {
 		config.Port = configFile.Server.Port
 	}
@@ -173,6 +182,11 @@ func applyConfigFile(config *Config, configFile *ConfigFile) {
 	if configFile.Monitor.MaxConcurrent > 0 {
 		config.MaxConcurrent = configFile.Monitor.MaxConcurrent
 	}
+	if configFile.Monitor.ActivityRetentionTime != "" {
+		if duration, err := time.ParseDuration(configFile.Monitor.ActivityRetentionTime); err == nil {
+			config.ActivityRetentionTime = duration
+		}
+	}
 
 	if configFile.Logging.Level != "" {
 		config.LogLevel = configFile.Logging.Level
@@ -190,6 +204,7 @@ func applyConfigFile(config *Config, configFile *ConfigFile) {
 // loadEnvironmentVariables 从环境变量加载配置
 func loadEnvironmentVariables(config *Config) {
 	config.DatabasePath = getEnv("DB_PATH", config.DatabasePath)
+	config.Host = getEnv("HOST", config.Host)
 	config.Port = getEnv("PORT", config.Port)
 	config.Environment = getEnv("GIN_MODE", config.Environment)
 	config.JWTSecret = getEnv("JWT_SECRET", config.JWTSecret)
@@ -215,6 +230,12 @@ func loadEnvironmentVariables(config *Config) {
 	}
 
 	config.MaxConcurrent = getEnvInt("MAX_CONCURRENT", config.MaxConcurrent)
+	
+	if activityRetention := os.Getenv("ACTIVITY_RETENTION_TIME"); activityRetention != "" {
+		if duration, err := time.ParseDuration(activityRetention); err == nil {
+			config.ActivityRetentionTime = duration
+		}
+	}
 }
 
 // generateRandomSecret 生成随机JWT密钥
@@ -232,6 +253,7 @@ func generateRandomSecret() (string, error) {
 func saveConfigFile(configPath string, config *Config) error {
 	// 转换为ConfigFile格式
 	configFile := ConfigFile{}
+	configFile.Server.Host = config.Host
 	configFile.Server.Port = config.Port
 	configFile.Server.Environment = config.Environment
 	configFile.Database.Path = config.DatabasePath
@@ -240,6 +262,7 @@ func saveConfigFile(configPath string, config *Config) error {
 	configFile.Monitor.Interval = config.MonitorInterval.String()
 	configFile.Monitor.PingTimeout = config.PingTimeout.String()
 	configFile.Monitor.MaxConcurrent = config.MaxConcurrent
+	configFile.Monitor.ActivityRetentionTime = config.ActivityRetentionTime.String()
 	configFile.Logging.Level = config.LogLevel
 	configFile.Logging.Format = config.LogFormat
 	configFile.CORS.AllowOrigins = config.AllowOrigins
@@ -291,12 +314,13 @@ func validateConfig(config *Config) {
 // printConfig 打印配置信息（隐藏敏感信息）
 func printConfig(config *Config) {
 	fmt.Println("=== etaMonitor 配置信息 ===")
-	fmt.Printf("服务端口: %s\n", config.Port)
+	fmt.Printf("监听地址: %s:%s\n", config.Host, config.Port)
 	fmt.Printf("运行模式: %s\n", config.Environment)
 	fmt.Printf("数据库路径: %s\n", config.DatabasePath)
 	fmt.Printf("监控间隔: %v\n", config.MonitorInterval)
 	fmt.Printf("Ping超时: %v\n", config.PingTimeout)
 	fmt.Printf("最大并发: %d\n", config.MaxConcurrent)
+	fmt.Printf("活动记录保留时间: %v\n", config.ActivityRetentionTime)
 	fmt.Printf("日志级别: %s\n", config.LogLevel)
 	fmt.Printf("JWT过期时间: %v\n", config.JWTExpiresIn)
 	fmt.Println("========================")

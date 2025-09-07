@@ -2,6 +2,7 @@ package main
 
 import (
 	"flag"
+	"fmt"
 	"log"
 	"os"
 
@@ -57,6 +58,9 @@ func main() {
 	router.Use(gin.Logger())
 	router.Use(gin.Recovery())
 
+	// 禁用Gin默认的可信代理功能，使用自定义IP检测逻辑
+	router.SetTrustedProxies(nil)
+
 	// 初始化API路由
 	api.SetupRoutes(router, database, cfg)
 
@@ -65,8 +69,9 @@ func main() {
 	go monitorService.Start()
 
 	// 启动服务器
-	log.Printf("Server starting on port %s", cfg.Port)
-	if err := router.Run(":" + cfg.Port); err != nil {
+	address := fmt.Sprintf("%s:%s", cfg.Host, cfg.Port)
+	log.Printf("Server starting on %s", address)
+	if err := router.Run(address); err != nil {
 		log.Fatal("Failed to start server:", err)
 	}
 }

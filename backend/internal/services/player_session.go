@@ -2,6 +2,7 @@ package services
 
 import (
 	"log"
+	"sync"
 	"time"
 
 	"etamonitor/internal/models"
@@ -13,6 +14,7 @@ import (
 type PlayerSessionService struct {
 	db            *gorm.DB
 	lastPlayerMap map[uint]map[string]bool // serverID -> playerName -> exists
+	mutex         sync.RWMutex             // 保护lastPlayerMap的并发访问
 }
 
 // NewPlayerSessionService 创建玩家会话服务
@@ -62,10 +64,12 @@ func (p *PlayerSessionService) initializeService() {
 	var servers []models.Server
 	p.db.Find(&servers)
 	
+	p.mutex.Lock()
 	for _, server := range servers {
 		p.lastPlayerMap[server.ID] = make(map[string]bool)
 		log.Printf("初始化服务器 %s 的玩家状态", server.Name)
 	}
+	p.mutex.Unlock()
 	
 	log.Println("玩家会话服务初始化完成")
 }
@@ -74,34 +78,53 @@ func (p *PlayerSessionService) initializeService() {
 func (p *PlayerSessionService) UpdatePlayerSessions(server *models.Server, currentPlayers []PlayerInfo) {
 	serverID := server.ID
 	
-	// 初始化该服务器的玩家映射
+	// 获取当前服务器的玩家状态（带锁保护）
+	p.mutex.Lock()
 	if p.lastPlayerMap[serverID] == nil {
 		p.lastPlayerMap[serverID] = make(map[string]bool)
 	}
+	lastPlayerMap := make(map[string]bool)
+	for k, v := range p.lastPlayerMap[serverID] {
+		lastPlayerMap[k] = v
+	}
+	p.mutex.Unlock()
 	
 	currentPlayerMap := make(map[string]bool)
 	
 	// 处理当前在线玩家
+	var newPlayers []PlayerInfo
 	for _, playerInfo := range currentPlayers {
 		playerName := playerInfo.Name
-		playerUUID := playerInfo.ID
 		currentPlayerMap[playerName] = true
 		
 		// 检查是否是新加入的玩家
-		if !p.lastPlayerMap[serverID][playerName] {
-			p.handlePlayerJoin(server, playerName, playerUUID)
+		if !lastPlayerMap[playerName] {
+			newPlayers = append(newPlayers, playerInfo)
 		}
 	}
 	
 	// 检查离开的玩家
-	for playerName := range p.lastPlayerMap[serverID] {
+	var leftPlayers []string
+	for playerName := range lastPlayerMap {
 		if !currentPlayerMap[playerName] {
-			p.handlePlayerLeave(server, playerName)
+			leftPlayers = append(leftPlayers, playerName)
 		}
 	}
 	
-	// 更新玩家映射
+	// 处理玩家加入事件（不持有锁）
+	for _, player := range newPlayers {
+		p.handlePlayerJoin(server, player.Name, player.ID)
+	}
+	
+	// 处理玩家离开事件（不持有锁）
+	for _, playerName := range leftPlayers {
+		p.handlePlayerLeave(server, playerName)
+	}
+	
+	// 更新玩家映射（带锁保护）
+	p.mutex.Lock()
 	p.lastPlayerMap[serverID] = currentPlayerMap
+	p.mutex.Unlock()
 }
 
 // handlePlayerJoin 处理玩家加入
@@ -140,6 +163,9 @@ func (p *PlayerSessionService) handlePlayerJoin(server *models.Server, playerNam
 	// 更新玩家的最后在线时间
 	player.LastSeen = time.Now()
 	p.db.Save(player)
+	
+	// 保存玩家活动记录
+	p.savePlayerActivity(player.ID, server.ID, "join", 0)
 	
 	// 发送实时通知
 	p.broadcastPlayerJoin(server.ID, player, server.Name)
@@ -183,6 +209,9 @@ func (p *PlayerSessionService) handlePlayerLeave(server *models.Server, playerNa
 	
 	// 更新玩家等级
 	p.updatePlayerRank(&player)
+	
+	// 保存玩家活动记录
+	p.savePlayerActivity(player.ID, server.ID, "leave", duration)
 	
 	// 发送实时通知
 	p.broadcastPlayerLeave(server.ID, &player, server.Name, duration)
@@ -353,6 +382,21 @@ func (p *PlayerSessionService) awardTitle(playerID uint, title string) {
 	log.Printf("玩家获得新称号: 玩家ID=%d, 称号=%s", playerID, title)
 }
 
+// savePlayerActivity 保存玩家活动记录
+func (p *PlayerSessionService) savePlayerActivity(playerID uint, serverID uint, activityType string, sessionDuration int) {
+	activity := models.PlayerActivity{
+		PlayerID:        playerID,
+		ServerID:        serverID,
+		ActivityType:    activityType,
+		Timestamp:       time.Now(),
+		SessionDuration: sessionDuration,
+	}
+	
+	if err := p.db.Create(&activity).Error; err != nil {
+		log.Printf("保存玩家活动记录失败: %v", err)
+	}
+}
+
 // broadcastPlayerJoin 广播玩家加入消息
 func (p *PlayerSessionService) broadcastPlayerJoin(serverID uint, player *models.Player, serverName string) {
 	data := map[string]interface{}{
@@ -392,6 +436,9 @@ func (p *PlayerSessionService) getPlayerAvatar(name string) string {
 
 // getCurrentPlayersCount 获取当前在线玩家数
 func (p *PlayerSessionService) getCurrentPlayersCount(serverID uint) int {
+	p.mutex.RLock()
+	defer p.mutex.RUnlock()
+	
 	if playerMap, exists := p.lastPlayerMap[serverID]; exists {
 		return len(playerMap)
 	}

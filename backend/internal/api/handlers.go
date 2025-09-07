@@ -4,7 +4,9 @@ import (
 	"errors"
 	"net/http"
 	"strconv"
+	"time"
 
+	"etamonitor/internal/config"
 	"etamonitor/internal/models"
 	"etamonitor/internal/services"
 
@@ -370,4 +372,83 @@ func getPlayerByUUIDOrUsername(db *gorm.DB, id string) (*models.Player, error) {
 		return nil, err // 返回最终的错误（可能是 gorm.ErrRecordNotFound）
 	}
 	return &player, nil
+}
+
+// handleGetRecentActivities 获取最近的玩家活动记录
+func handleGetRecentActivities(db *gorm.DB, cfg *config.Config) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		// 获取可选的服务器ID参数
+		serverIDStr := c.Query("server_id")
+		limitStr := c.DefaultQuery("limit", "20")
+		
+		limit, err := strconv.Atoi(limitStr)
+		if err != nil || limit <= 0 || limit > 100 {
+			limit = 20
+		}
+		
+		// 计算时间范围（使用配置中的保留时间）
+		since := time.Now().Add(-cfg.ActivityRetentionTime)
+		
+		// 构建查询
+		query := db.Model(&models.PlayerActivity{}).
+			Preload("Player").
+			Preload("Server").
+			Where("timestamp >= ?", since).
+			Order("timestamp DESC").
+			Limit(limit)
+		
+		// 如果指定了服务器ID，过滤特定服务器的活动
+		if serverIDStr != "" {
+			if serverID, err := strconv.ParseUint(serverIDStr, 10, 64); err == nil {
+				query = query.Where("server_id = ?", serverID)
+			}
+		}
+		
+		var activities []models.PlayerActivity
+		if err := query.Find(&activities).Error; err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{
+				"success": false,
+				"error": gin.H{
+					"code":    "DATABASE_ERROR",
+					"message": "查询活动记录失败",
+				},
+			})
+			return
+		}
+		
+		// 转换为前端需要的格式
+		var result []map[string]interface{}
+		for _, activity := range activities {
+			item := map[string]interface{}{
+				"id":              activity.ID,
+				"player_id":       activity.Player.ID,
+				"player_name":     activity.Player.Username,
+				"player_avatar":   getPlayerAvatar(activity.Player.UUID, activity.Player.Username),
+				"player_rank":     activity.Player.Rank,
+				"server_id":       activity.Server.ID,
+				"server_name":     activity.Server.Name,
+				"activity_type":   activity.ActivityType,
+				"timestamp":       activity.Timestamp,
+			}
+			
+			// 如果是离开活动且有会话时长，添加时长信息
+			if activity.ActivityType == "leave" && activity.SessionDuration > 0 {
+				item["session_duration"] = activity.SessionDuration
+			}
+			
+			result = append(result, item)
+		}
+		
+		c.JSON(http.StatusOK, gin.H{
+			"success": true,
+			"data":    result,
+			"meta": gin.H{
+				"total":       len(result),
+				"limit":       limit,
+				"since":       since,
+				"server_id":   serverIDStr,
+				"retention_time": cfg.ActivityRetentionTime.String(),
+			},
+		})
+	}
 }

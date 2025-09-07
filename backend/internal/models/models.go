@@ -63,6 +63,18 @@ type PlayerSession struct {
 	Server    Server     `json:"server" gorm:"foreignKey:ServerID"`
 }
 
+// PlayerActivity 玩家活动记录
+type PlayerActivity struct {
+	ID              uint      `json:"id" gorm:"primaryKey"`
+	PlayerID        uint      `json:"player_id" gorm:"not null;index"`
+	ServerID        uint      `json:"server_id" gorm:"not null;index"`
+	ActivityType    string    `json:"activity_type" gorm:"not null"` // "join" 或 "leave"
+	Timestamp       time.Time `json:"timestamp" gorm:"not null;index"`
+	SessionDuration int       `json:"session_duration,omitempty"` // 仅在 leave 时有值，单位：秒
+	Player          Player    `json:"player" gorm:"foreignKey:PlayerID"`
+	Server          Server    `json:"server" gorm:"foreignKey:ServerID"`
+}
+
 // PlayerTitle 玩家称号
 type PlayerTitle struct {
 	ID       uint      `json:"id" gorm:"primaryKey"`

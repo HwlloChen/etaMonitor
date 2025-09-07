@@ -140,7 +140,10 @@ func DetectServerType(host string, javaPort, bedrockPort int) ServerType {
 
 // isJavaServer 检测是否为Java版服务器
 func isJavaServer(host string, port int) bool {
-	conn, err := net.DialTimeout("tcp", fmt.Sprintf("%s:%d", host, port), 10*time.Second)
+	// 首先尝试解析SRV记录
+	resolvedHost, resolvedPort, _ := ResolveSRV(host, port)
+	
+	conn, err := net.DialTimeout("tcp", fmt.Sprintf("%s:%d", resolvedHost, resolvedPort), 10*time.Second)
 	if err != nil {
 		return false
 	}
@@ -176,7 +179,10 @@ func isJavaServer(host string, port int) bool {
 
 // isBedrockServer 检测是否为基岩版服务器
 func isBedrockServer(host string, port int) bool {
-	addr, err := net.ResolveUDPAddr("udp", fmt.Sprintf("%s:%d", host, port))
+	// 首先尝试解析SRV记录
+	resolvedHost, resolvedPort, _ := ResolveSRV(host, port)
+	
+	addr, err := net.ResolveUDPAddr("udp", fmt.Sprintf("%s:%d", resolvedHost, resolvedPort))
 	if err != nil {
 		return false
 	}
@@ -203,7 +209,15 @@ func isBedrockServer(host string, port int) bool {
 
 // JavaServerPing 查询Java版服务器状态
 func JavaServerPing(host string, port int) (*MinecraftServer, error) {
-	conn, err := net.DialTimeout("tcp", fmt.Sprintf("%s:%d", host, port), 15*time.Second)
+	// 首先尝试解析SRV记录
+	resolvedHost, resolvedPort, err := ResolveSRV(host, port)
+	if err != nil {
+		// SRV解析失败时记录日志但继续使用原始主机和端口
+		fmt.Printf("SRV解析失败，使用原始地址 %s:%d, 错误: %v\n", host, port, err)
+		resolvedHost, resolvedPort = host, port
+	}
+	
+	conn, err := net.DialTimeout("tcp", fmt.Sprintf("%s:%d", resolvedHost, resolvedPort), 15*time.Second)
 	if err != nil {
 		return nil, fmt.Errorf("连接失败: %v", err)
 	}
@@ -214,7 +228,7 @@ func JavaServerPing(host string, port int) (*MinecraftServer, error) {
 	// 设置读写超时
 	conn.SetDeadline(time.Now().Add(15 * time.Second))
 	
-	// 发送握手包
+	// 发送握手包 - 使用原始主机名但连接到解析后的地址
 	handshake := createHandshakePacket(host, port)
 	if _, err = conn.Write(handshake); err != nil {
 		return nil, fmt.Errorf("发送握手包失败: %v", err)
@@ -374,7 +388,15 @@ func JavaServerPing(host string, port int) (*MinecraftServer, error) {
 
 // BedrockServerPing 查询基岩版服务器状态
 func BedrockServerPing(host string, port int) (*MinecraftServer, error) {
-	addr, err := net.ResolveUDPAddr("udp", fmt.Sprintf("%s:%d", host, port))
+	// 首先尝试解析SRV记录
+	resolvedHost, resolvedPort, err := ResolveSRV(host, port)
+	if err != nil {
+		// SRV解析失败时记录日志但继续使用原始主机和端口
+		fmt.Printf("SRV解析失败，使用原始地址 %s:%d, 错误: %v\n", host, port, err)
+		resolvedHost, resolvedPort = host, port
+	}
+	
+	addr, err := net.ResolveUDPAddr("udp", fmt.Sprintf("%s:%d", resolvedHost, resolvedPort))
 	if err != nil {
 		return nil, fmt.Errorf("解析地址失败: %v", err)
 	}
@@ -679,6 +701,35 @@ func getVarIntSize(value int32) int {
 		value >>= 7
 	}
 	return size
+}
+
+// ResolveSRV 解析SRV记录获取实际的主机和端口
+func ResolveSRV(host string, port int) (string, int, error) {
+	// 如果端口不是默认端口，说明用户明确指定了端口，跳过SRV查询
+	if port != 25565 && port != 19132 {
+		return host, port, nil
+	}
+	
+	var service string
+	if port == 19132 {
+		service = "minecraft-be" // 基岩版
+	} else {
+		service = "minecraft" // Java版
+	}
+	
+	// 尝试查询SRV记录
+	_, addrs, err := net.LookupSRV(service, "tcp", host)
+	if err != nil || len(addrs) == 0 {
+		// 没有SRV记录，使用原始主机和端口
+		return host, port, nil
+	}
+	
+	// 使用第一个SRV记录
+	srv := addrs[0]
+	resolvedHost := strings.TrimSuffix(srv.Target, ".")
+	resolvedPort := int(srv.Port)
+	
+	return resolvedHost, resolvedPort, nil
 }
 
 // minInt 返回两个整数中较小的一个

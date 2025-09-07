@@ -34,6 +34,7 @@ func Init(dbPath string) (*gorm.DB, error) {
 		&models.ServerStat{},
 		&models.Player{},
 		&models.PlayerSession{},
+		&models.PlayerActivity{},
 		&models.PlayerTitle{},
 		&models.User{},
 	)

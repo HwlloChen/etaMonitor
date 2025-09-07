@@ -84,7 +84,11 @@
         </div>
 
         <mdui-list v-if="serverActivities.length > 0" class="list">
-          <mdui-list-item v-for="activity in serverActivities" :key="`${activity.playerId}-${activity.timestamp}`">
+          <mdui-list-item 
+            v-for="activity in serverActivities" 
+            :key="`${activity.playerId}-${activity.timestamp}`"
+            @click="goToPlayer(activity.playerName)"
+          >
             <mdui-avatar slot="icon" :src="activity.playerAvatar"></mdui-avatar>
 
             <div class="activity-info">
@@ -556,6 +560,14 @@ export default {
     onMounted(async () => {
       await loadServer()
       await loadOnlinePlayers()
+      
+      // 加载服务器特定的活动记录
+      try {
+        await playerStore.fetchRecentActivities({ server_id: serverId.value, limit: 15 })
+      } catch (error) {
+        console.error('加载服务器活动失败:', error)
+      }
+      
       setupEventListeners()
 
       // 初始化segmented-button的选中状态

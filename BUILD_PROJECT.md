@@ -1,20 +1,21 @@
-# etaMonitor 项目构建指南
+# etaMonitor Project Build Guide
 
-本项目采用前后端分离架构，支持一键全自动构建。你可以直接在项目根目录下使用 Makefile 进行所有常用操作。
+This project uses a front-end and back-end separation architecture and supports one-click fully automated builds. You can use the Makefile in the project root directory for all common operations.
 
-## 版本信息
+## Version Information
 
-构建时会自动注入版本号、构建时间和 Git 提交信息。默认版本号为 1.0.1，你可以通过 VERSION 环境变量指定版本号：
+Version number, build time, and Git commit information are automatically injected during the build. You can specify the version number through the VERSION environment variable:
 
 ```sh
-# 使用默认版本号构建
+# Build with default version number
 make
 
-# 指定版本号构建
+# Build with specified version number
 VERSION=1.2.0 make
 ```
 
-启动时会显示版本信息：
+Version information will be displayed at startup:
+
 ```
 === etaMonitor 1.2.0 ===
 Build Time: 2025-08-14T21:30:45+0800
@@ -22,83 +23,85 @@ Git Commit: a1b2c3d
 ========================
 ```
 
-## 依赖环境
+## Dependencies
 
-- Go 1.18 及以上
-- Node.js 16+ 和 npm
-- Linux/macOS/WSL（Windows 用户建议用 WSL）
-- tar 工具（发布打包时需要）
+- Go 1.20 or higher
+- Node.js and npm
+- Linux/macOS/WSL (Windows users recommended to use WSL)
+- tar utility (required for release packaging)
 
-## 一键构建
+## One-Click Build
 
-在项目根目录下执行：
+Execute in the project root directory:
 
 ```sh
 make
 ```
 
-等价于：
+Equivalent to:
+
 ```sh
 make build
 ```
 
-该命令会自动：
-1. 进入 backend 目录
-2. 构建前端（自动安装依赖并构建）
-3. 拷贝前端产物到后端嵌入目录
-4. 构建后端可执行文件 `etamonitor`（输出到 output 目录）
+This command will automatically:
 
-## 运行
+1. Enter the backend directory
+2. Build the frontend (automatically install dependencies and build)
+3. Copy frontend artifacts to backend embedding directory
+4. Build the backend executable `etamonitor` (output to output directory)
 
-构建完成后，直接运行：
+## Running
+
+After the build is complete, run directly:
 
 ```sh
 ./output/etamonitor
 ```
 
-或使用：
+Or use:
 
 ```sh
 make run
 ```
 
-（等价于进入 output 目录后执行 ./etamonitor）
+(Equivalent to entering the output directory and executing ./etamonitor)
 
-## 发布打包
+## Release Packaging
 
-### 创建多平台发布包
+### Create Multi-Platform Release Packages
 
-使用以下命令创建适用于多个操作系统和架构的发布包：
+Use the following command to create release packages for multiple operating systems and architectures:
 
 ```sh
 make release
 ```
 
-或指定版本号：
+Or specify a version number:
 
 ```sh
 VERSION=1.2.0 make release
 ```
 
-该命令会：
+This command will:
 
-1. 构建前端资源
-2. 为以下平台交叉编译二进制文件：
+1. Build frontend resources
+2. Cross-compile binary files for the following platforms:
    - **Linux**: amd64, arm64, arm, 386
    - **Windows**: amd64, 386, arm64
    - **macOS**: amd64 (Intel), arm64 (Apple Silicon)
    - **FreeBSD**: amd64, arm64
 
-3. 为每个平台创建包含以下文件的 tar.gz 压缩包：
-   - 对应平台的可执行文件（`etamonitor` 或 `etamonitor.exe`）
-   - `LICENSE` 文件
-   - `README.md` 文件
+3. Create tar.gz compressed packages for each platform containing the following files:
+   - Corresponding platform executable (`etamonitor` or `etamonitor.exe`)
+   - `LICENSE` file
+   - `README.md` file
 
-4. 生成的压缩包命名格式：`etamonitor-{版本号}-{操作系统}-{架构}.tar.gz`
+4. Generated compressed packages are named in the format: `etamonitor-{version}-{os}-{arch}.tar.gz`
 
-### 发布包示例
+### Release Package Examples
 
-构建完成后，`release/` 目录下会包含类似以下文件：
+After the build is complete, the `release/` directory will contain files similar to the following:
 
 ```
 release/
@@ -115,68 +118,70 @@ release/
 └── etamonitor-1.2.0-freebsd-arm64.tar.gz
 ```
 
-用户下载对应平台的压缩包后，解压即可使用：
+Users can download the corresponding platform's compressed package and extract it for use:
 
 ```sh
-# 示例：Linux AMD64 用户
+# Example: Linux AMD64 users
 tar -xzf etamonitor-1.2.0-linux-amd64.tar.gz
 cd etamonitor-1.2.0-linux-amd64/
 ./etamonitor
 ```
 
-## 其他常用命令
+## Other Common Commands
 
-- 仅构建前端：
+- Build frontend only:
 
   ```sh
   make frontend
   ```
 
-- 仅构建后端：
+- Build backend only:
 
   ```sh
   make backend
   ```
 
-- 清理所有构建产物：
+- Clean all build artifacts:
 
   ```sh
   make clean
   ```
 
-  注意：`make clean` 会同时清理 `output/`、`release/` 和前端构建产物。
+  Note: `make clean` will clean `output/`, `release/`, and frontend build artifacts simultaneously.
 
-## 目录结构说明
+## Directory Structure
 
-- `frontend/`：前端源码
-- `backend/`：后端源码及 Makefile
-- `backend/internal/static/frontend-dist/`：前端构建产物，go:embed 自动嵌入
-- `output/etamonitor`：开发构建的后端二进制文件
-- `release/`：发布打包的多平台压缩包
+- `frontend/`: Frontend source code
+- `backend/`: Backend source code and Makefile
+- `backend/internal/static/frontend-dist/`: Frontend build artifacts, automatically embedded by go:embed
+- `output/etamonitor`: Backend binary file for development builds
+- `release/`: Multi-platform compressed packages for release packaging
 
-## 开发流程建议
+## Development Workflow Recommendations
 
-1. **日常开发**：使用 `make` 进行快速构建和测试
-2. **本地测试**：使用 `make run` 启动服务
-3. **版本发布**：使用 `VERSION=x.y.z make release` 创建发布包
-4. **清理环境**：使用 `make clean` 清理所有构建产物
+1. **Daily Development**: Use `make` for quick builds and testing
+2. **Local Testing**: Use `make run` to start the service
+3. **Version Release**: Use `VERSION=x.y.z make release` to create release packages
+4. **Environment Cleanup**: Use `make clean` to clean all build artifacts
 
-## 常见问题
+## Common Issues
 
-- **go:embed 找不到文件**：请确保已执行 `make frontend`，且 `backend/internal/static/frontend-dist/` 下有内容。
-- **Node/npm 未安装**：请先安装 Node.js 和 npm。
-- **端口被占用**：请检查 8080 端口是否被其他程序占用（你可以通过配置文件来指定端口号）。
-- **版本信息显示 unknown**：请确保在 Git 仓库中构建，否则无法获取 Git 提交信息。
-- **交叉编译失败**：某些平台可能因为 CGO 依赖而编译失败，这是正常现象，成功的平台会正常打包。
-- **发布包过大**：如果二进制文件过大，可以在 GO_LDFLAGS 中添加 `-s -w` 参数来减小文件大小：
+- **go:embed cannot find files**: Please ensure `make frontend` has been executed and there is content under `backend/internal/static/frontend-dist/`.
+- **Node/npm not installed**: Please install Node.js and npm first.
+- **Port occupied**: Please check if port 8080 is occupied by other programs (you can specify the port number through the configuration file).
+- **Version information shows unknown**: Please ensure building in a Git repository, otherwise Git commit information cannot be obtained.
+- **Cross-compilation failure**: Some platforms may fail to compile due to CGO dependencies, which is normal. Successful platforms will be packaged normally.
+- **Release package too large**: If the binary file is too large, you can add `-s -w` parameters to GO_LDFLAGS to reduce file size:
+
   ```makefile
   GO_LDFLAGS := -s -w -X "etamonitor/internal/config.Version=$(VERSION)" ...
   ```
-- **tar 命令未找到**：Windows 用户请在 WSL 环境中执行，或安装 tar 工具。
 
-## 版本管理建议
+- **tar command not found**: Windows users please execute in WSL environment, or install tar utility.
 
-- 使用语义化版本号（Semantic Versioning）：`主版本.次版本.修订版`
-- 主版本：不兼容的 API 修改
-- 次版本：向后兼容的功能性新增
-- 修订版：向后兼容的问题修正
+## Version Management Recommendations
+
+- Use Semantic Versioning: `major.minor.patch`
+- Major version: Incompatible API changes
+- Minor version: Backward-compatible feature additions
+- Patch version: Backward-compatible bug fixes
