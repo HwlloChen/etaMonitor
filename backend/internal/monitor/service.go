@@ -1,7 +1,9 @@
 package monitor
 
 import (
+	"context"
 	"log"
+	"sync"
 	"time"
 
 	"etamonitor/internal/config"
@@ -16,13 +18,27 @@ type Service struct {
 	db                   *gorm.DB
 	config               *config.Config
 	playerSessionService *services.PlayerSessionService
+	
+	// 并发控制
+	semaphore            chan struct{} // 控制并发goroutine数量
+	ctx                  context.Context
+	cancel               context.CancelFunc
+	wg                   sync.WaitGroup
 }
 
 func NewService(db *gorm.DB, cfg *config.Config) *Service {
+	ctx, cancel := context.WithCancel(context.Background())
+	
+	// 限制最大并发检查数为10个
+	maxConcurrent := 10
+	
 	return &Service{
 		db:                   db,
 		config:               cfg,
 		playerSessionService: services.NewPlayerSessionService(db),
+		semaphore:            make(chan struct{}, maxConcurrent),
+		ctx:                  ctx,
+		cancel:               cancel,
 	}
 }
 
@@ -37,23 +53,27 @@ func (s *Service) Start() {
 	cleanupTicker := time.NewTicker(1 * time.Hour)
 	defer cleanupTicker.Stop()
 
-	// 移除会话清理任务，避免误杀活跃玩家会话
-	// sessionCleanupTicker := time.NewTicker(5 * time.Minute)
-	// defer sessionCleanupTicker.Stop()
-
 	log.Printf("Server monitoring started with interval: %v", s.config.MonitorInterval)
 
 	for {
 		select {
+		case <-s.ctx.Done():
+			// 等待所有goroutine完成
+			log.Println("Waiting for all monitoring goroutines to finish...")
+			s.wg.Wait()
+			log.Println("Monitor service stopped")
+			return
 		case <-ticker.C:
 			s.checkAllServers()
 		case <-cleanupTicker.C:
 			s.cleanupOldStats()
-		// 移除会话清理的case分支
-		// case <-sessionCleanupTicker.C:
-		//	s.playerSessionService.CleanupInactiveSessions()
 		}
 	}
+}
+
+// Stop 优雅停止监控服务
+func (s *Service) Stop() {
+	s.cancel()
 }
 
 func (s *Service) checkAllServers() {
@@ -63,8 +83,50 @@ func (s *Service) checkAllServers() {
 		return
 	}
 
+	log.Printf("Checking %d servers...", len(servers))
+	
 	for _, server := range servers {
-		go s.checkServer(&server)
+		// 复制server变量避免闭包问题
+		serverCopy := server
+		
+		s.wg.Add(1)
+		go func() {
+			defer s.wg.Done()
+			defer func() {
+				if r := recover(); r != nil {
+					log.Printf("Panic in server check for %s: %v", serverCopy.Name, r)
+				}
+			}()
+			
+			s.checkServerWithTimeout(&serverCopy)
+		}()
+	}
+}
+
+func (s *Service) checkServerWithTimeout(server *models.Server) {
+	// 获取信号量，限制并发数
+	select {
+	case s.semaphore <- struct{}{}:
+		defer func() { <-s.semaphore }()
+	case <-s.ctx.Done():
+		return
+	}
+	
+	// 设置超时上下文
+	ctx, cancel := context.WithTimeout(s.ctx, 30*time.Second)
+	defer cancel()
+	
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		s.checkServer(server)
+	}()
+	
+	select {
+	case <-done:
+		// 正常完成
+	case <-ctx.Done():
+		log.Printf("Server check timeout for %s", server.Name)
 	}
 }
 
@@ -115,13 +177,14 @@ func (s *Service) checkServer(server *models.Server) {
 
 		// 更新服务器的实时信息
 		serverUpdates := map[string]interface{}{
-			"status":         "online",
-			"players_online": serverInfo.Players.Online,
-			"max_players":    serverInfo.Players.Max,
-			"ping":           serverInfo.Ping,
-			"version":        serverInfo.Version.Name,
-			"motd":           extractDescriptionText(serverInfo.Description),
-			"last_checked":   &stat.Timestamp,
+			"status":          "online",
+			"players_online":  serverInfo.Players.Online,
+			"max_players":     serverInfo.Players.Max,
+			"anonymous_count": s.playerSessionService.GetAnonymousCount(server.ID),
+			"ping":            serverInfo.Ping,
+			"version":         serverInfo.Version.Name,
+			"motd":            extractDescriptionText(serverInfo.Description),
+			"last_checked":    &stat.Timestamp,
 		}
 		// 保存这些信息作为最后一次在线状态
 		s.db.Model(server).Update("last_online_data", serverInfo)
@@ -129,14 +192,15 @@ func (s *Service) checkServer(server *models.Server) {
 
 		// 广播服务器状态更新
 		s.broadcastServerStatus(server.ID, map[string]interface{}{
-			"id":             server.ID,
-			"name":           server.Name,
-			"status":         "online",
-			"players_online": serverInfo.Players.Online,
-			"max_players":    serverInfo.Players.Max,
-			"ping":           serverInfo.Ping,
-			"version":        serverInfo.Version.Name,
-			"motd":           extractDescriptionText(serverInfo.Description),
+			"id":              server.ID,
+			"name":            server.Name,
+			"status":          "online",
+			"players_online":  serverInfo.Players.Online,
+			"max_players":     serverInfo.Players.Max,
+			"anonymous_count": s.playerSessionService.GetAnonymousCount(server.ID),
+			"ping":            serverInfo.Ping,
+			"version":         serverInfo.Version.Name,
+			"motd":            extractDescriptionText(serverInfo.Description),
 		})
 	} else {
 		log.Printf("Failed to ping server %s: %v", server.Name, err)
@@ -149,18 +213,20 @@ func (s *Service) checkServer(server *models.Server) {
 
 		// 更新离线状态和相关数据
 		s.db.Model(server).Updates(map[string]interface{}{
-			"status":         "offline",
-			"last_checked":   &stat.Timestamp,
-			"players_online": 0,
-			"max_players":    0,
-			"ping":           -1,
+			"status":          "offline",
+			"last_checked":    &stat.Timestamp,
+			"players_online":  0,
+			"max_players":     0,
+			"anonymous_count": 0,
+			"ping":            -1,
 		})
 
 		// 广播服务器离线状态
 		s.broadcastServerStatus(server.ID, map[string]interface{}{
-			"id":     server.ID,
-			"name":   server.Name,
-			"status": "offline",
+			"id":              server.ID,
+			"name":            server.Name,
+			"status":          "offline",
+			"anonymous_count": 0,
 		})
 	}
 

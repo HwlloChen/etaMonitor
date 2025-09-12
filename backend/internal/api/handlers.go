@@ -305,6 +305,7 @@ func handleGetServerOnlinePlayers(db *gorm.DB) gin.HandlerFunc {
 		var onlinePlayers []map[string]interface{}
 		for _, session := range activeSessions {
 			player := map[string]interface{}{
+				"id":       session.Player.ID,
 				"username": session.Player.Username,
 				"uuid":     session.Player.UUID,
 				"rank":     session.Player.Rank,
@@ -312,6 +313,20 @@ func handleGetServerOnlinePlayers(db *gorm.DB) gin.HandlerFunc {
 				"avatar":   getPlayerAvatar(session.Player.UUID, session.Player.Username),
 			}
 			onlinePlayers = append(onlinePlayers, player)
+		}
+		
+		// 添加匿名玩家信息（如果有的话）
+		if server.AnonymousCount > 0 {
+			anonymousPlayer := map[string]interface{}{
+				"id":            "anonymous",
+				"username":      "匿名玩家",
+				"uuid":          "00000000-0000-0000-0000-000000000000",
+				"rank":          "Anonymous",
+				"count":         server.AnonymousCount,
+				"isAnonymous":   true,
+				"avatar":        "https://crafthead.net/avatar/steve",
+			}
+			onlinePlayers = append(onlinePlayers, anonymousPlayer)
 		}
 
 		c.JSON(http.StatusOK, gin.H{

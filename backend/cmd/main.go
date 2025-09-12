@@ -1,10 +1,15 @@
 package main
 
 import (
+	"context"
 	"flag"
 	"fmt"
 	"log"
+	"net/http"
 	"os"
+	"os/signal"
+	"syscall"
+	"time"
 
 	"etamonitor/internal/api"
 	"etamonitor/internal/cli"
@@ -77,10 +82,41 @@ func main() {
 	monitorService := monitor.NewService(database, cfg)
 	go monitorService.Start()
 
-	// 启动服务器
+	// 创建HTTP服务器
 	address := fmt.Sprintf("%s:%s", cfg.Host, cfg.Port)
-	log.Printf("Server starting on %s", address)
-	if err := router.Run(address); err != nil {
-		log.Fatal("Failed to start server:", err)
+	server := &http.Server{
+		Addr:           address,
+		Handler:        router,
+		ReadTimeout:    15 * time.Second,
+		WriteTimeout:   15 * time.Second,
+		IdleTimeout:    60 * time.Second,
+		MaxHeaderBytes: 1 << 20, // 1MB
 	}
+
+	// 启动服务器的goroutine
+	go func() {
+		log.Printf("Server starting on %s", address)
+		if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+			log.Fatal("Failed to start server:", err)
+		}
+	}()
+
+	// 等待中断信号来优雅关闭服务器
+	quit := make(chan os.Signal, 1)
+	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
+	<-quit
+	log.Println("Shutting down server...")
+
+	// 停止监控服务
+	monitorService.Stop()
+
+	// 给服务器5秒时间来完成现有请求
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	
+	if err := server.Shutdown(ctx); err != nil {
+		log.Fatal("Server forced to shutdown:", err)
+	}
+
+	log.Println("Server exited")
 }

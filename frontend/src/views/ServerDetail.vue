@@ -57,17 +57,25 @@
         </div>
 
         <mdui-list v-if="onlinePlayers.length > 0" class="list">
-          <mdui-list-item v-for="player in onlinePlayers" :key="player.username" @click="goToPlayer(player.username)">
+          <mdui-list-item 
+            v-for="player in onlinePlayers" 
+            :key="player.id || player.username" 
+            @click="player.isAnonymous ? null : goToPlayer(player.username)"
+            :class="{ 'anonymous-player': player.isAnonymous, 'clickable': !player.isAnonymous }"
+          >
             <mdui-avatar slot="icon" :src="player.avatar"></mdui-avatar>
 
             <div class="player-info">
-              <div class="player-name">{{ player.username }}</div>
+              <div class="player-name">
+                {{ player.isAnonymous ? `${player.username} (${player.count}位)` : player.username }}
+              </div>
               <div class="player-rank">{{ player.rank }}</div>
             </div>
 
-            <div class="player-time" slot="end-icon">
+            <div class="player-time" slot="end-icon" v-if="!player.isAnonymous">
               {{ formatJoinTime(player.joinTime) }}
             </div>
+            <mdui-icon slot="end-icon" name="visibility_off" v-else style="color: var(--mdui-color-on-surface-variant);"></mdui-icon>
           </mdui-list-item>
         </mdui-list>
 
@@ -718,6 +726,20 @@ export default {
 }
 
 .ping-unknown {
+  color: rgb(var(--mdui-color-on-surface-variant));
+}
+
+.clickable {
+  cursor: pointer;
+}
+
+.anonymous-player {
+  opacity: 0.7;
+  cursor: default;
+}
+
+.anonymous-player .player-name {
+  font-style: italic;
   color: rgb(var(--mdui-color-on-surface-variant));
 }
 

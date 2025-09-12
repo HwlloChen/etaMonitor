@@ -12,16 +12,18 @@ import (
 
 // PlayerSessionService 玩家会话服务
 type PlayerSessionService struct {
-	db            *gorm.DB
-	lastPlayerMap map[uint]map[string]bool // serverID -> playerName -> exists
-	mutex         sync.RWMutex             // 保护lastPlayerMap的并发访问
+	db             *gorm.DB
+	lastPlayerMap  map[uint]map[string]bool // serverID -> playerName -> exists
+	anonymousCount map[uint]int             // serverID -> anonymous count
+	mutex          sync.RWMutex             // 保护lastPlayerMap和anonymousCount的并发访问
 }
 
 // NewPlayerSessionService 创建玩家会话服务
 func NewPlayerSessionService(db *gorm.DB) *PlayerSessionService {
 	service := &PlayerSessionService{
-		db:            db,
-		lastPlayerMap: make(map[uint]map[string]bool),
+		db:             db,
+		lastPlayerMap:  make(map[uint]map[string]bool),
+		anonymousCount: make(map[uint]int),
 	}
 	
 	// 服务启动时清理未结束的会话并初始化状态
@@ -67,6 +69,7 @@ func (p *PlayerSessionService) initializeService() {
 	p.mutex.Lock()
 	for _, server := range servers {
 		p.lastPlayerMap[server.ID] = make(map[string]bool)
+		p.anonymousCount[server.ID] = 0
 		log.Printf("初始化服务器 %s 的玩家状态", server.Name)
 	}
 	p.mutex.Unlock()
@@ -78,22 +81,45 @@ func (p *PlayerSessionService) initializeService() {
 func (p *PlayerSessionService) UpdatePlayerSessions(server *models.Server, currentPlayers []PlayerInfo) {
 	serverID := server.ID
 	
-	// 获取当前服务器的玩家状态（带锁保护）
-	p.mutex.Lock()
-	if p.lastPlayerMap[serverID] == nil {
-		p.lastPlayerMap[serverID] = make(map[string]bool)
+	// 分离匿名玩家和正常玩家
+	var normalPlayers []PlayerInfo
+	anonymousPlayerCount := 0
+	for _, player := range currentPlayers {
+		if player.ID == "00000000-0000-0000-0000-000000000000" {
+			anonymousPlayerCount++
+		} else {
+			normalPlayers = append(normalPlayers, player)
+		}
 	}
+	
+	// 获取当前服务器的玩家状态（带锁保护）
+	p.mutex.RLock()
+	if p.lastPlayerMap[serverID] == nil {
+		p.mutex.RUnlock()
+		
+		// 初始化状态
+		p.mutex.Lock()
+		if p.lastPlayerMap[serverID] == nil {
+			p.lastPlayerMap[serverID] = make(map[string]bool)
+			p.anonymousCount[serverID] = 0
+		}
+		p.mutex.Unlock()
+		
+		p.mutex.RLock()
+	}
+	
 	lastPlayerMap := make(map[string]bool)
 	for k, v := range p.lastPlayerMap[serverID] {
 		lastPlayerMap[k] = v
 	}
-	p.mutex.Unlock()
+	lastAnonymousCount := p.anonymousCount[serverID]
+	p.mutex.RUnlock()
 	
 	currentPlayerMap := make(map[string]bool)
 	
-	// 处理当前在线玩家
+	// 处理当前在线的正常玩家
 	var newPlayers []PlayerInfo
-	for _, playerInfo := range currentPlayers {
+	for _, playerInfo := range normalPlayers {
 		playerName := playerInfo.Name
 		currentPlayerMap[playerName] = true
 		
@@ -111,20 +137,26 @@ func (p *PlayerSessionService) UpdatePlayerSessions(server *models.Server, curre
 		}
 	}
 	
+	// 更新玩家映射和匿名玩家计数（原子操作）
+	p.mutex.Lock()
+	p.lastPlayerMap[serverID] = currentPlayerMap
+	p.anonymousCount[serverID] = anonymousPlayerCount
+	p.mutex.Unlock()
+	
 	// 处理玩家加入事件（不持有锁）
 	for _, player := range newPlayers {
 		p.handlePlayerJoin(server, player.Name, player.ID)
 	}
-	
+		
 	// 处理玩家离开事件（不持有锁）
 	for _, playerName := range leftPlayers {
 		p.handlePlayerLeave(server, playerName)
 	}
 	
-	// 更新玩家映射（带锁保护）
-	p.mutex.Lock()
-	p.lastPlayerMap[serverID] = currentPlayerMap
-	p.mutex.Unlock()
+	// 如果匿名玩家数量有变化，记录日志
+	if anonymousPlayerCount != lastAnonymousCount {
+		log.Printf("服务器 %s 匿名玩家数量变化: %d -> %d", server.Name, lastAnonymousCount, anonymousPlayerCount)
+	}
 }
 
 // handlePlayerJoin 处理玩家加入
@@ -439,10 +471,17 @@ func (p *PlayerSessionService) getCurrentPlayersCount(serverID uint) int {
 	p.mutex.RLock()
 	defer p.mutex.RUnlock()
 	
+	playerCount := 0
 	if playerMap, exists := p.lastPlayerMap[serverID]; exists {
-		return len(playerMap)
+		playerCount = len(playerMap)
 	}
-	return 0
+	
+	anonymousCount := 0
+	if count, exists := p.anonymousCount[serverID]; exists {
+		anonymousCount = count
+	}
+	
+	return playerCount + anonymousCount
 }
 
 // GetActivePlayerSessions 获取活跃的玩家会话
@@ -450,6 +489,17 @@ func (p *PlayerSessionService) GetActivePlayerSessions(serverID uint) []models.P
 	var sessions []models.PlayerSession
 	p.db.Preload("Player").Where("server_id = ? AND leave_time IS NULL", serverID).Find(&sessions)
 	return sessions
+}
+
+// GetAnonymousCount 获取指定服务器的匿名玩家数量
+func (p *PlayerSessionService) GetAnonymousCount(serverID uint) int {
+	p.mutex.RLock()
+	defer p.mutex.RUnlock()
+	
+	if count, exists := p.anonymousCount[serverID]; exists {
+		return count
+	}
+	return 0
 }
 
 // ManualCleanupOldSessions 手动清理极长时间的旧会话（仅在确认需要时调用）

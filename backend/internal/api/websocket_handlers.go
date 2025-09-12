@@ -32,12 +32,12 @@ func handleWebSocketStats(c *gin.Context) {
 		return
 	}
 
-	clientCount := websocket.GlobalHub.GetClientCount()
+	stats := websocket.GlobalHub.GetStats()
 	c.JSON(200, gin.H{
 		"success": true,
-		"data": gin.H{
-			"connected_clients": clientCount,
-			"status":           "running",
+		"data": map[string]interface{}{
+			"status": "running",
+			"stats":  stats,
 		},
 	})
 }

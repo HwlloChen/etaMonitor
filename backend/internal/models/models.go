@@ -15,6 +15,7 @@ type Server struct {
 	Status         string          `json:"status" gorm:"default:offline"`
 	PlayersOnline  int             `json:"players_online" gorm:"default:0"`
 	MaxPlayers     int             `json:"max_players" gorm:"default:0"`
+	AnonymousCount int             `json:"anonymous_count" gorm:"default:0"` // 匿名玩家数量
 	Ping           int             `json:"ping" gorm:"default:0"`
 	Version        string          `json:"version"`
 	MOTD           string          `json:"motd"`
