@@ -23,8 +23,9 @@ etaMonitor is a powerful self-hosted Minecraft server monitoring system that pro
 - 🎮 **Version Compatibility**: Automatic detection of Java/Bedrock server versions
 - 🌐 **SRV Records**: Support for SRV DNS record resolution
 - 🔐 **Security Authentication**: JWT authentication and HTTPS security alerts
+- 💼 **Database Management**: Support for database backup, restore, and intelligent optimization
 - 🎨 **Modern Interface**: Material Design 3 style interface based on MDUI
-- 📱 **Responsive Design**: Perfect adaptation for desktop and mobile devices
+- 📱 **Responsive Design**: Perfect adaptation for desktop and mobile devices with adaptive chart controls
 
 ## Quick Start
 
@@ -269,9 +270,10 @@ make run
 ### Monitoring Features
 
 - **Real-time Status**: Server online status, player count, latency
-- **Historical Data**: Online player count trend charts
+- **Historical Data**: Online player count trend charts with accurate time axis display
 - **Player Activity**: Recent player join/leave records within 15 minutes
 - **Server Details**: Version information, MOTD, Favicon, etc.
+- **Data Management**: Admin panel supports database backup, restore, and optimization functions
 
 ## Troubleshooting
 
