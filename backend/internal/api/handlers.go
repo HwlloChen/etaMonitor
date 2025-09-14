@@ -467,3 +467,137 @@ func handleGetRecentActivities(db *gorm.DB, cfg *config.Config) gin.HandlerFunc 
 		})
 	}
 }
+
+// handleStatsOverview 统计概览
+func handleStatsOverview(db *gorm.DB) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		var totalServers, onlineServers int64
+		db.Model(&models.Server{}).Count(&totalServers)
+		db.Model(&models.Server{}).Where("status = ?", "online").Count(&onlineServers)
+
+		var totalPlayers, peakPlayers int64
+		db.Model(&models.Server{}).Where("status = ?", "online").Select("SUM(players_online)").Scan(&totalPlayers)
+
+		// 获取今日峰值
+		today := time.Now().Truncate(24 * time.Hour)
+		db.Model(&models.ServerStat{}).
+			Where("timestamp >= ?", today).
+			Select("MAX(players_online)").
+			Scan(&peakPlayers)
+
+		c.JSON(http.StatusOK, gin.H{
+			"success": true,
+			"data": map[string]interface{}{
+				"totalServers":  totalServers,
+				"onlineServers": onlineServers,
+				"totalPlayers":  totalPlayers,
+				"peakPlayers":   peakPlayers,
+			},
+		})
+	}
+}
+
+// handleServerStats 服务器历史统计
+func handleServerStats(db *gorm.DB) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		serverID := c.Param("id")
+		timeRange := c.DefaultQuery("range", "24h") // 30m, 1h, 6h, 24h, 7d, 30d
+		var since time.Time
+		var limit int
+		now := time.Now()
+
+		switch timeRange {
+		case "30m":
+			since = now.Add(-30 * time.Minute)
+			limit = 30
+		case "1h":
+			since = now.Add(-1 * time.Hour)
+			limit = 60
+		case "6h":
+			since = now.Add(-6 * time.Hour)
+			limit = 360
+		case "24h":
+			since = now.Add(-24 * time.Hour)
+			limit = 288
+		case "7d":
+			since = now.Add(-7 * 24 * time.Hour)
+			limit = 168
+		case "30d":
+			since = now.Add(-30 * 24 * time.Hour)
+			limit = 120
+		default:
+			since = now.Add(-24 * time.Hour)
+			limit = 288
+		}
+
+		var allStats []models.ServerStat
+		query := db.Where("server_id = ? AND timestamp >= ?", serverID, since)
+		if err := query.Order("timestamp ASC").Find(&allStats).Error; err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"success": false, "error": map[string]interface{}{"code": "DATABASE_ERROR", "message": "查询统计数据失败"}})
+			return
+		}
+
+		var stats = sampleStats(allStats, limit)
+		summary := calculateStatsSummary(stats)
+
+		c.JSON(http.StatusOK, gin.H{
+			"success": true,
+			"data": gin.H{
+				"stats":   stats,
+				"summary": summary,
+				"meta":    gin.H{"range": timeRange, "since": since, "count": len(stats), "interval": getIntervalString(timeRange)},
+			},
+		})
+	}
+}
+
+// handlePlayerStats 玩家统计
+func handlePlayerStats(db *gorm.DB) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		id := c.Param("id")
+		serverIDs := c.QueryArray("server_id")
+		var player models.Player
+
+		err := db.Where("uuid = ?", id).First(&player).Error
+		if err != nil {
+			err = db.Where("username = ?", id).First(&player).Error
+			if err != nil {
+				c.JSON(http.StatusNotFound, gin.H{"success": false, "error": map[string]interface{}{"code": "NOT_FOUND", "message": "玩家不存在"}})
+				return
+			}
+		}
+
+		var sessions []models.PlayerSession
+		query := db.Where("player_id = ?", player.ID)
+		if len(serverIDs) > 0 {
+			var validServerIDs []string
+			for _, sid := range serverIDs {
+				if sid != "" {
+					validServerIDs = append(validServerIDs, sid)
+				}
+			}
+			if len(validServerIDs) > 0 {
+				query = query.Where("server_id IN ?", validServerIDs)
+			}
+		}
+		query.Find(&sessions)
+
+		hourDist := make(map[int]int)
+		for _, s := range sessions {
+			hourDist[s.JoinTime.Hour()]++
+		}
+
+		daySet := make(map[string]struct{})
+		for _, s := range sessions {
+			daySet[s.JoinTime.Format("2006-01-02")] = struct{}{}
+		}
+
+		c.JSON(http.StatusOK, gin.H{
+			"success": true,
+			"data": map[string]interface{}{
+				"time_distribution": hourDist,
+				"active_days":       len(daySet),
+			},
+		})
+	}
+}
