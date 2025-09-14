@@ -137,4 +137,22 @@ func setupProtectedRoutes(r *gin.RouterGroup, db *gorm.DB, cfg *config.Config) {
 		users.PUT("/:id", handleUpdateUser(db))
 		users.DELETE("/:id", handleDeleteUser(db))
 	}
+	
+	// 数据库管理
+	database := r.Group("/database")
+	{
+		database.GET("/stats", handleGetDatabaseStats(db))
+		database.POST("/optimize", handleOptimizeDatabase(db, cfg.DatabasePath))
+	}
+	
+	// 备份管理
+	backup := r.Group("/backup")
+	{
+		backup.POST("/create", handleCreateBackup(db, cfg.DatabasePath))
+		backup.GET("/list", handleListBackups(db, cfg.DatabasePath))
+		backup.DELETE("/delete", handleDeleteBackup(db, cfg.DatabasePath))
+		backup.POST("/cleanup", handleCleanupBackups(db, cfg.DatabasePath))
+		backup.POST("/restore", handleRestoreBackup(db, cfg.DatabasePath))
+		backup.POST("/validate", handleValidateBackup(db, cfg.DatabasePath))
+	}
 }

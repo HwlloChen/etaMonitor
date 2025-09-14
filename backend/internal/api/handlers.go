@@ -314,17 +314,17 @@ func handleGetServerOnlinePlayers(db *gorm.DB) gin.HandlerFunc {
 			}
 			onlinePlayers = append(onlinePlayers, player)
 		}
-		
+
 		// 添加匿名玩家信息（如果有的话）
 		if server.AnonymousCount > 0 {
 			anonymousPlayer := map[string]interface{}{
-				"id":            "anonymous",
-				"username":      "匿名玩家",
-				"uuid":          "00000000-0000-0000-0000-000000000000",
-				"rank":          "Anonymous",
-				"count":         server.AnonymousCount,
-				"isAnonymous":   true,
-				"avatar":        "https://crafthead.net/avatar/steve",
+				"id":          "anonymous",
+				"username":    "匿名玩家",
+				"uuid":        "00000000-0000-0000-0000-000000000000",
+				"rank":        "Anonymous",
+				"count":       server.AnonymousCount,
+				"isAnonymous": true,
+				"avatar":      "https://crafthead.net/avatar/steve",
 			}
 			onlinePlayers = append(onlinePlayers, anonymousPlayer)
 		}
@@ -395,15 +395,15 @@ func handleGetRecentActivities(db *gorm.DB, cfg *config.Config) gin.HandlerFunc 
 		// 获取可选的服务器ID参数
 		serverIDStr := c.Query("server_id")
 		limitStr := c.DefaultQuery("limit", "20")
-		
+
 		limit, err := strconv.Atoi(limitStr)
 		if err != nil || limit <= 0 || limit > 100 {
 			limit = 20
 		}
-		
+
 		// 计算时间范围（使用配置中的保留时间）
 		since := time.Now().Add(-cfg.ActivityRetentionTime)
-		
+
 		// 构建查询
 		query := db.Model(&models.PlayerActivity{}).
 			Preload("Player").
@@ -411,14 +411,14 @@ func handleGetRecentActivities(db *gorm.DB, cfg *config.Config) gin.HandlerFunc 
 			Where("timestamp >= ?", since).
 			Order("timestamp DESC").
 			Limit(limit)
-		
+
 		// 如果指定了服务器ID，过滤特定服务器的活动
 		if serverIDStr != "" {
 			if serverID, err := strconv.ParseUint(serverIDStr, 10, 64); err == nil {
 				query = query.Where("server_id = ?", serverID)
 			}
 		}
-		
+
 		var activities []models.PlayerActivity
 		if err := query.Find(&activities).Error; err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{
@@ -430,38 +430,38 @@ func handleGetRecentActivities(db *gorm.DB, cfg *config.Config) gin.HandlerFunc 
 			})
 			return
 		}
-		
+
 		// 转换为前端需要的格式
 		var result []map[string]interface{}
 		for _, activity := range activities {
 			item := map[string]interface{}{
-				"id":              activity.ID,
-				"player_id":       activity.Player.ID,
-				"player_name":     activity.Player.Username,
-				"player_avatar":   getPlayerAvatar(activity.Player.UUID, activity.Player.Username),
-				"player_rank":     activity.Player.Rank,
-				"server_id":       activity.Server.ID,
-				"server_name":     activity.Server.Name,
-				"activity_type":   activity.ActivityType,
-				"timestamp":       activity.Timestamp,
+				"id":            activity.ID,
+				"player_id":     activity.Player.ID,
+				"player_name":   activity.Player.Username,
+				"player_avatar": getPlayerAvatar(activity.Player.UUID, activity.Player.Username),
+				"player_rank":   activity.Player.Rank,
+				"server_id":     activity.Server.ID,
+				"server_name":   activity.Server.Name,
+				"activity_type": activity.ActivityType,
+				"timestamp":     activity.Timestamp,
 			}
-			
+
 			// 如果是离开活动且有会话时长，添加时长信息
 			if activity.ActivityType == "leave" && activity.SessionDuration > 0 {
 				item["session_duration"] = activity.SessionDuration
 			}
-			
+
 			result = append(result, item)
 		}
-		
+
 		c.JSON(http.StatusOK, gin.H{
 			"success": true,
 			"data":    result,
 			"meta": gin.H{
-				"total":       len(result),
-				"limit":       limit,
-				"since":       since,
-				"server_id":   serverIDStr,
+				"total":          len(result),
+				"limit":          limit,
+				"since":          since,
+				"server_id":      serverIDStr,
 				"retention_time": cfg.ActivityRetentionTime.String(),
 			},
 		})
@@ -599,5 +599,63 @@ func handlePlayerStats(db *gorm.DB) gin.HandlerFunc {
 				"active_days":       len(daySet),
 			},
 		})
+	}
+}
+
+// -------------------------
+// Helper Functions
+// -------------------------
+
+// sampleStats 对统计数据进行采样
+func sampleStats(stats []models.ServerStat, maxPoints int) []models.ServerStat {
+	if len(stats) <= maxPoints {
+		return stats
+	}
+	step := float64(len(stats)) / float64(maxPoints)
+	var sampled []models.ServerStat
+	for i := 0.0; i < float64(len(stats)); i += step {
+		sampled = append(sampled, stats[int(i)])
+	}
+	return sampled
+}
+
+// calculateStatsSummary 计算统计数据的摘要信息
+func calculateStatsSummary(stats []models.ServerStat) map[string]interface{} {
+	if len(stats) == 0 {
+		return map[string]interface{}{"avg_players": 0, "max_players": 0, "avg_ping": 0, "uptime": 0}
+	}
+	var totalPlayers, totalPing, onlineCount, maxPlayers int
+	for _, stat := range stats {
+		totalPlayers += stat.PlayersOnline
+		if stat.Ping > 0 {
+			totalPing += stat.Ping
+			onlineCount++
+		}
+		if stat.PlayersOnline > maxPlayers {
+			maxPlayers = stat.PlayersOnline
+		}
+	}
+	avgPlayers := float64(totalPlayers) / float64(len(stats))
+	var avgPing float64
+	if onlineCount > 0 {
+		avgPing = float64(totalPing) / float64(onlineCount)
+	}
+	uptime := float64(onlineCount) / float64(len(stats)) * 100
+	return map[string]interface{}{"avg_players": avgPlayers, "max_players": maxPlayers, "avg_ping": avgPing, "uptime": uptime}
+}
+
+// getIntervalString 获取时间间隔字符串
+func getIntervalString(timeRange string) string {
+	switch timeRange {
+	case "30m", "1h", "6h":
+		return "1 MINUTE"
+	case "24h":
+		return "5 MINUTE"
+	case "7d":
+		return "1 HOUR"
+	case "30d":
+		return "6 HOUR"
+	default:
+		return "5 MINUTE"
 	}
 }

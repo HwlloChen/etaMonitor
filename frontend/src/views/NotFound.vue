@@ -16,10 +16,12 @@
 	height: 80vh;
 	color: rgb(var(--mdui-color-on-surface));
 }
+
 .not-found h1 {
 	font-size: 48px;
 	margin: 0 0 12px 0;
 }
+
 .not-found p {
 	font-size: 18px;
 	margin-bottom: 24px;

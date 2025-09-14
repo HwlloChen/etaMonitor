@@ -1,10 +1,6 @@
 <template>
   <div style="position: relative; height: 100%; width: 100%;">
-    <Line 
-      ref="chartRef"
-      :data="chartData" 
-      :options="chartOptions"
-    />
+    <Line ref="chartRef" :data="chartData" :options="chartOptions" />
   </div>
 </template>
 
@@ -15,6 +11,7 @@ import {
   Chart as ChartJS,
   CategoryScale,
   LinearScale,
+  TimeScale,
   PointElement,
   LineElement,
   Title,
@@ -22,10 +19,12 @@ import {
   Legend,
   Filler
 } from 'chart.js'
+import 'chartjs-adapter-date-fns'
 
 ChartJS.register(
   CategoryScale,
   LinearScale,
+  TimeScale,
   PointElement,
   LineElement,
   Title,
@@ -51,7 +50,7 @@ export default {
   },
   setup() {
     const chartRef = ref(null)
-    
+
     return {
       chartRef
     }

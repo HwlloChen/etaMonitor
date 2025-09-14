@@ -2,9 +2,11 @@ package api
 
 import (
 	"net/http"
+	"path/filepath"
 	"time"
 
 	"etamonitor/internal/auth"
+	"etamonitor/internal/db"
 	"etamonitor/internal/models"
 	"etamonitor/internal/services"
 
@@ -464,59 +466,289 @@ func handleDeleteUser(db *gorm.DB) gin.HandlerFunc {
 }
 
 // -------------------------
-// Helper Functions
+// Database Management (Admin-level)
 // -------------------------
 
-// sampleStats 对统计数据进行采样
-func sampleStats(stats []models.ServerStat, maxPoints int) []models.ServerStat {
-	if len(stats) <= maxPoints {
-		return stats
+// handleOptimizeDatabase 执行数据库优化
+func handleOptimizeDatabase(database *gorm.DB, dbPath string) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		optimizationService := db.NewOptimizationServiceWithPath(database, dbPath)
+
+		result, err := optimizationService.OptimizeDatabase()
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{
+				"success": false,
+				"error": map[string]interface{}{
+					"code":    "OPTIMIZATION_FAILED",
+					"message": "数据库优化失败",
+					"details": err.Error(),
+				},
+			})
+			return
+		}
+
+		c.JSON(http.StatusOK, gin.H{
+			"success": true,
+			"data":    result,
+			"message": "数据库优化成功",
+		})
 	}
-	step := float64(len(stats)) / float64(maxPoints)
-	var sampled []models.ServerStat
-	for i := 0.0; i < float64(len(stats)); i += step {
-		sampled = append(sampled, stats[int(i)])
-	}
-	return sampled
 }
 
-// calculateStatsSummary 计算统计数据的摘要信息
-func calculateStatsSummary(stats []models.ServerStat) map[string]interface{} {
-	if len(stats) == 0 {
-		return map[string]interface{}{"avg_players": 0, "max_players": 0, "avg_ping": 0, "uptime": 0}
-	}
-	var totalPlayers, totalPing, onlineCount, maxPlayers int
-	for _, stat := range stats {
-		totalPlayers += stat.PlayersOnline
-		if stat.Ping > 0 {
-			totalPing += stat.Ping
-			onlineCount++
+// handleGetDatabaseStats 获取数据库统计信息
+func handleGetDatabaseStats(database *gorm.DB) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		optimizationService := db.NewOptimizationService(database)
+
+		stats, err := optimizationService.GetDatabaseStats()
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{
+				"success": false,
+				"error": map[string]interface{}{
+					"code":    "STATS_FAILED",
+					"message": "获取数据库统计失败",
+					"details": err.Error(),
+				},
+			})
+			return
 		}
-		if stat.PlayersOnline > maxPlayers {
-			maxPlayers = stat.PlayersOnline
-		}
+
+		c.JSON(http.StatusOK, gin.H{
+			"success": true,
+			"data":    stats,
+		})
 	}
-	avgPlayers := float64(totalPlayers) / float64(len(stats))
-	var avgPing float64
-	if onlineCount > 0 {
-		avgPing = float64(totalPing) / float64(onlineCount)
-	}
-	uptime := float64(onlineCount) / float64(len(stats)) * 100
-	return map[string]interface{}{"avg_players": avgPlayers, "max_players": maxPlayers, "avg_ping": avgPing, "uptime": uptime}
 }
 
-// getIntervalString 获取时间间隔字符串
-func getIntervalString(timeRange string) string {
-	switch timeRange {
-	case "30m", "1h", "6h":
-		return "1 MINUTE"
-	case "24h":
-		return "5 MINUTE"
-	case "7d":
-		return "1 HOUR"
-	case "30d":
-		return "6 HOUR"
-	default:
-		return "5 MINUTE"
+// handleCreateBackup 创建数据库备份
+func handleCreateBackup(database *gorm.DB, dbPath string) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		var req struct {
+			BackupDir string `json:"backup_dir"`
+		}
+
+		if err := c.ShouldBindJSON(&req); err != nil {
+			// 使用默认备份目录
+			req.BackupDir = filepath.Join(filepath.Dir(dbPath), "backups")
+		}
+
+		backupService := db.NewBackupService(database, dbPath)
+
+		result, err := backupService.CreateBackup(req.BackupDir)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{
+				"success": false,
+				"error": map[string]interface{}{
+					"code":    "BACKUP_FAILED",
+					"message": "创建备份失败",
+					"details": err.Error(),
+				},
+			})
+			return
+		}
+
+		c.JSON(http.StatusOK, gin.H{
+			"success": true,
+			"data":    result,
+			"message": "备份创建成功",
+		})
+	}
+}
+
+// handleListBackups 列出备份文件
+func handleListBackups(database *gorm.DB, dbPath string) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		backupDir := c.DefaultQuery("backup_dir", filepath.Join(filepath.Dir(dbPath), "backups"))
+
+		backupService := db.NewBackupService(database, dbPath)
+
+		backups, err := backupService.ListBackups(backupDir)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{
+				"success": false,
+				"error": map[string]interface{}{
+					"code":    "LIST_BACKUPS_FAILED",
+					"message": "列出备份失败",
+					"details": err.Error(),
+				},
+			})
+			return
+		}
+
+		c.JSON(http.StatusOK, gin.H{
+			"success": true,
+			"data": gin.H{
+				"backups":    backups,
+				"backup_dir": backupDir,
+				"count":      len(backups),
+			},
+		})
+	}
+}
+
+// handleDeleteBackup 删除备份文件
+func handleDeleteBackup(database *gorm.DB, dbPath string) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		var req struct {
+			BackupPath string `json:"backup_path" binding:"required"`
+		}
+
+		if err := c.ShouldBindJSON(&req); err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{
+				"success": false,
+				"error": map[string]interface{}{
+					"code":    "VALIDATION_ERROR",
+					"message": "请求参数验证失败",
+					"details": err.Error(),
+				},
+			})
+			return
+		}
+
+		backupService := db.NewBackupService(database, dbPath)
+
+		if err := backupService.DeleteBackup(req.BackupPath); err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{
+				"success": false,
+				"error": map[string]interface{}{
+					"code":    "DELETE_BACKUP_FAILED",
+					"message": "删除备份失败",
+					"details": err.Error(),
+				},
+			})
+			return
+		}
+
+		c.JSON(http.StatusOK, gin.H{
+			"success": true,
+			"message": "备份删除成功",
+		})
+	}
+}
+
+// handleCleanupBackups 清理旧备份文件
+func handleCleanupBackups(database *gorm.DB, dbPath string) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		var req struct {
+			BackupDir string `json:"backup_dir"`
+			KeepDays  int    `json:"keep_days"`
+		}
+
+		// 尝试绑定JSON，忽略错误
+		c.ShouldBindJSON(&req)
+
+		// 如果没有指定备份目录，使用默认值
+		if req.BackupDir == "" {
+			req.BackupDir = filepath.Join(filepath.Dir(dbPath), "backups")
+		}
+
+		// 如果没有指定保留天数或无效，使用默认值
+		if req.KeepDays <= 0 {
+			req.KeepDays = 30 // 默认保留30天
+		}
+
+		backupService := db.NewBackupService(database, dbPath)
+
+		result, err := backupService.CleanupOldBackups(req.BackupDir, req.KeepDays)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{
+				"success": false,
+				"error": map[string]interface{}{
+					"code":    "CLEANUP_FAILED",
+					"message": "清理备份失败",
+					"details": err.Error(),
+				},
+			})
+			return
+		}
+
+		c.JSON(http.StatusOK, gin.H{
+			"success": true,
+			"data":    result,
+			"message": "备份清理成功",
+		})
+	}
+}
+
+// handleRestoreBackup 恢复数据库备份
+func handleRestoreBackup(database *gorm.DB, dbPath string) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		var req struct {
+			BackupPath string `json:"backup_path" binding:"required"`
+		}
+
+		if err := c.ShouldBindJSON(&req); err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{
+				"success": false,
+				"error": map[string]interface{}{
+					"code":    "VALIDATION_ERROR",
+					"message": "请求参数验证失败",
+					"details": err.Error(),
+				},
+			})
+			return
+		}
+
+		backupService := db.NewBackupService(database, dbPath)
+
+		result, err := backupService.RestoreBackup(req.BackupPath)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{
+				"success": false,
+				"error": map[string]interface{}{
+					"code":    "RESTORE_FAILED",
+					"message": "恢复备份失败",
+					"details": err.Error(),
+				},
+			})
+			return
+		}
+
+		c.JSON(http.StatusOK, gin.H{
+			"success": true,
+			"data":    result,
+			"message": "备份恢复成功",
+		})
+	}
+}
+
+// handleValidateBackup 验证备份文件
+func handleValidateBackup(database *gorm.DB, dbPath string) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		var req struct {
+			BackupPath string `json:"backup_path" binding:"required"`
+		}
+
+		if err := c.ShouldBindJSON(&req); err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{
+				"success": false,
+				"error": map[string]interface{}{
+					"code":    "VALIDATION_ERROR",
+					"message": "请求参数验证失败",
+					"details": err.Error(),
+				},
+			})
+			return
+		}
+
+		backupService := db.NewBackupService(database, dbPath)
+
+		result, err := backupService.ValidateBackup(req.BackupPath)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{
+				"success": false,
+				"error": map[string]interface{}{
+					"code":    "VALIDATION_FAILED",
+					"message": "验证备份失败",
+					"details": err.Error(),
+				},
+			})
+			return
+		}
+
+		c.JSON(http.StatusOK, gin.H{
+			"success": true,
+			"data":    result,
+		})
 	}
 }

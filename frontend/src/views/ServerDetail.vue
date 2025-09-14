@@ -57,12 +57,9 @@
         </div>
 
         <mdui-list v-if="onlinePlayers.length > 0" class="list">
-          <mdui-list-item 
-            v-for="player in onlinePlayers" 
-            :key="player.id || player.username" 
+          <mdui-list-item v-for="player in onlinePlayers" :key="player.id || player.username"
             @click="player.isAnonymous ? null : goToPlayer(player.username)"
-            :class="{ 'anonymous-player': player.isAnonymous, 'clickable': !player.isAnonymous }"
-          >
+            :class="{ 'anonymous-player': player.isAnonymous, 'clickable': !player.isAnonymous }">
             <mdui-avatar slot="icon" :src="player.avatar"></mdui-avatar>
 
             <div class="player-info">
@@ -75,7 +72,8 @@
             <div class="player-time" slot="end-icon" v-if="!player.isAnonymous">
               {{ formatJoinTime(player.joinTime) }}
             </div>
-            <mdui-icon slot="end-icon" name="visibility_off" v-else style="color: var(--mdui-color-on-surface-variant);"></mdui-icon>
+            <mdui-icon slot="end-icon" name="visibility_off" v-else
+              style="color: var(--mdui-color-on-surface-variant);"></mdui-icon>
           </mdui-list-item>
         </mdui-list>
 
@@ -92,11 +90,8 @@
         </div>
 
         <mdui-list v-if="serverActivities.length > 0" class="list">
-          <mdui-list-item 
-            v-for="activity in serverActivities" 
-            :key="`${activity.playerId}-${activity.timestamp}`"
-            @click="goToPlayer(activity.playerName)"
-          >
+          <mdui-list-item v-for="activity in serverActivities" :key="`${activity.playerId}-${activity.timestamp}`"
+            @click="goToPlayer(activity.playerName)">
             <mdui-avatar slot="icon" :src="activity.playerAvatar"></mdui-avatar>
 
             <div class="activity-info">
@@ -128,12 +123,25 @@
       <div class="card-header">
         <h2>服务器状态历史</h2>
         <div class="chart-controls">
-          <mdui-segmented-button-group ref="segmentedButtonGroup">
+          <!-- 宽屏幕设备使用 segmented button -->
+          <mdui-segmented-button-group ref="segmentedButtonGroup" class="desktop-controls">
             <mdui-segmented-button v-for="range in timeRanges" :key="range.value" :value="range.value"
               :selected="selectedTimeRange === range.value" @click="selectTimeRange(range.value)">
               {{ range.label }}
             </mdui-segmented-button>
           </mdui-segmented-button-group>
+
+          <!-- 小屏幕设备使用 select -->
+          <mdui-select
+            variant="outlined"
+            :value="selectedTimeRange"
+            @change="selectTimeRange($event.target.value)"
+            class="mobile-controls"
+          >
+            <mdui-menu-item v-for="range in timeRanges" :key="range.value" :value="range.value">
+              {{ range.label }}
+            </mdui-menu-item>
+          </mdui-select>
         </div>
       </div>
 
@@ -189,7 +197,6 @@ export default {
 
     // 图表数据
     const chartData = ref({
-      labels: [],
       datasets: [{
         label: '在线玩家数',
         data: [],
@@ -209,12 +216,23 @@ export default {
       animation: true, // 启用动画
       scales: {
         x: {
+          type: 'time',
           display: true,
           title: {
             display: true,
             text: '时间'
           },
+          time: {
+            displayFormats: {
+              minute: 'HH:mm',
+              hour: 'MM/dd HH:mm',
+              day: 'MM/dd'
+            },
+            tooltipFormat: 'yyyy-MM-dd HH:mm:ss'
+          },
           ticks: {
+            source: 'auto',
+            autoSkip: true,
             maxTicksLimit: 10
           }
         },
@@ -299,13 +317,13 @@ export default {
     const loadServerStats = async () => {
       try {
         const response = await fetch(`/api/stats/servers/${serverId.value}?range=${selectedTimeRange.value}`)
-        
+
         // 检查响应状态
         if (response.status === 404) {
           router.push('/404')
           return
         }
-        
+
         const result = await response.json()
 
         if (result.success && result.data && result.data.stats) {
@@ -322,36 +340,29 @@ export default {
     const loadRecentDataForRealtime = async () => {
       try {
         const response = await fetch(`/api/stats/servers/${serverId.value}?range=30m`)
-        
+
         // 检查响应状态
         if (response.status === 404) {
           router.push('/404')
           return
         }
-        
+
         const result = await response.json()
 
         if (result.success && result.data && result.data.stats) {
           // 为实时模式设置初始数据
           const stats = result.data.stats
-          const labels = []
           const data = []
 
           for (const stat of stats) {
-            const date = new Date(stat.timestamp)
-            const timeLabel = date.toLocaleTimeString('zh-CN', {
-              hour: '2-digit',
-              minute: '2-digit',
-              second: '2-digit'
+            data.push({
+              x: new Date(stat.timestamp),
+              y: stat.players_online || 0
             })
-
-            labels.push(timeLabel)
-            data.push(stat.players_online || 0)
           }
 
           // 更新图表数据
           chartData.value = {
-            labels: labels,
             datasets: [{
               label: '在线玩家数',
               data: data,
@@ -371,25 +382,17 @@ export default {
     }
 
     const updateChartData = (stats) => {
-      const labels = []
       const data = []
 
       for (const stat of stats) {
-        const date = new Date(stat.timestamp)
-        const timeLabel = date.toLocaleTimeString('zh-CN', {
-          month: 'numeric',
-          day: 'numeric',
-          hour: '2-digit',
-          minute: '2-digit'
+        data.push({
+          x: new Date(stat.timestamp),
+          y: stat.players_online || 0
         })
-
-        labels.push(timeLabel)
-        data.push(stat.players_online || 0)
       }
 
       // 更新图表数据
       chartData.value = {
-        labels: labels,
         datasets: [{
           label: '在线玩家数',
           data: data,
@@ -427,25 +430,19 @@ export default {
           return
         }
 
-        const timeLabel = new Date(timestamp).toLocaleTimeString('zh-CN', {
-          hour: '2-digit',
-          minute: '2-digit',
-          second: '2-digit'
-        })
-
         // 创建新的数据数组
-        const newLabels = [...chartData.value.labels, timeLabel]
-        const newData = [...chartData.value.datasets[0].data, playersOnline]
+        const newData = [...chartData.value.datasets[0].data, {
+          x: new Date(timestamp),
+          y: playersOnline
+        }]
 
         // 保持数据点数量在合理范围内（最多50个点）
-        if (newLabels.length > 50) {
-          newLabels.shift()
+        if (newData.length > 50) {
           newData.shift()
         }
 
         // 更新图表数据
         chartData.value = {
-          labels: newLabels,
           datasets: [{
             label: '在线玩家数',
             data: newData,
@@ -568,14 +565,14 @@ export default {
     onMounted(async () => {
       await loadServer()
       await loadOnlinePlayers()
-      
+
       // 加载服务器特定的活动记录
       try {
         await playerStore.fetchRecentActivities({ server_id: serverId.value, limit: 15 })
       } catch (error) {
         console.error('加载服务器活动失败:', error)
       }
-      
+
       setupEventListeners()
 
       // 初始化segmented-button的选中状态
@@ -831,6 +828,25 @@ export default {
   display: flex;
   gap: 8px;
   align-items: center;
+}
+
+.desktop-controls {
+  display: block;
+}
+
+.mobile-controls {
+  display: none;
+  min-width: 120px;
+}
+
+@media (max-width: 1023px) {
+  .desktop-controls {
+    display: none;
+  }
+
+  .mobile-controls {
+    display: block;
+  }
 }
 
 @media (max-width: 768px) {
